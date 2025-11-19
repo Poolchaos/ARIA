@@ -4,16 +4,32 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import os
 
+from src.voice_routes import router as voice_router
+from src.redis_client import close_redis
+
 app = FastAPI(title="ARIA Agent", version="1.0.0")
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:3004")],
+    allow_origins=[
+        os.getenv("FRONTEND_URL", "http://localhost:3004"),
+        "http://localhost:3004",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include voice routes
+app.include_router(voice_router)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    await close_redis()
 
 
 class ChatRequest(BaseModel):

@@ -1,0 +1,185 @@
+import { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Volume2, Check } from 'lucide-react';
+
+interface Voice {
+  id: string;
+  name: string;
+  displayName: string;
+  gender: 'male' | 'female';
+  accent: string;
+  description: string;
+}
+
+const AVAILABLE_VOICES: Voice[] = [
+  { id: 'en-US-GuyNeural', name: 'en-US-GuyNeural', displayName: 'Guy', gender: 'male', accent: 'American', description: 'Clear and professional' },
+  { id: 'en-US-DavisNeural', name: 'en-US-DavisNeural', displayName: 'Davis', gender: 'male', accent: 'American', description: 'Warm and friendly' },
+  { id: 'en-US-TonyNeural', name: 'en-US-TonyNeural', displayName: 'Tony', gender: 'male', accent: 'American', description: 'Energetic and upbeat' },
+  { id: 'en-US-AriaNeural', name: 'en-US-AriaNeural', displayName: 'Aria', gender: 'female', accent: 'American', description: 'Natural and expressive' },
+  { id: 'en-US-JennyNeural', name: 'en-US-JennyNeural', displayName: 'Jenny', gender: 'female', accent: 'American', description: 'Friendly and clear' },
+  { id: 'en-US-MichelleNeural', name: 'en-US-MichelleNeural', displayName: 'Michelle', gender: 'female', accent: 'American', description: 'Professional and calm' },
+  { id: 'en-GB-RyanNeural', name: 'en-GB-RyanNeural', displayName: 'Ryan', gender: 'male', accent: 'British', description: 'Sophisticated British' },
+  { id: 'en-GB-SoniaNeural', name: 'en-GB-SoniaNeural', displayName: 'Sonia', gender: 'female', accent: 'British', description: 'Elegant British' },
+];
+
+interface VoiceSelectionStepProps {
+  onNext: () => void;
+  onBack: () => void;
+  onVoicePreview: (isPlaying: boolean) => void;
+}
+
+export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSelectionStepProps) {
+  const [selectedVoice, setSelectedVoice] = useState<Voice>(AVAILABLE_VOICES[0]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [gender, setGender] = useState<'all' | 'male' | 'female'>('all');
+
+  const filteredVoices = AVAILABLE_VOICES.filter(v =>
+    gender === 'all' || v.gender === gender
+  );
+
+  const playVoicePreview = async (voice: Voice) => {
+    if (isPlaying) return;
+
+    try {
+      setIsPlaying(true);
+      onVoicePreview(true);
+
+      const response = await fetch('http://localhost:8002/voice/test-tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `Hi! I'm ${voice.displayName}. I'll be your voice assistant.`,
+          voice_name: voice.name,
+        }),
+      });
+
+      const data = await response.json();
+      const audioData = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+      const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        setIsPlaying(false);
+        onVoicePreview(false);
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        setIsPlaying(false);
+        onVoicePreview(false);
+      };
+
+      await audio.play();
+    } catch (error) {
+      console.error('Voice preview error:', error);
+      setIsPlaying(false);
+      onVoicePreview(false);
+    }
+  };
+
+  const handleContinue = () => {
+    // Save voice preference to local storage
+    localStorage.setItem('selectedVoice', JSON.stringify(selectedVoice));
+    onNext();
+  };
+
+  return (
+    <div className="flex flex-col flex-1">
+      <div className="text-center mb-8">
+        <motion.h2
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="text-3xl font-bold text-white mb-2"
+        >
+          Choose Your Voice
+        </motion.h2>
+        <motion.p
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="text-gray-400"
+        >
+          Select a voice that you'll love to hear
+        </motion.p>
+      </div>
+
+      {/* Gender filter */}
+      <div className="flex justify-center gap-2 mb-6">
+        {(['all', 'male', 'female'] as const).map((g) => (
+          <button
+            key={g}
+            onClick={() => setGender(g)}
+            className={`px-4 py-2 rounded-lg font-medium transition-all ${
+              gender === g
+                ? 'bg-primary-500 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            {g === 'all' ? 'All Voices' : `${g.charAt(0).toUpperCase() + g.slice(1)} Voices`}
+          </button>
+        ))}
+      </div>
+
+      {/* Voice grid */}
+      <div className="grid grid-cols-2 gap-4 mb-8 flex-1 overflow-y-auto">
+        {filteredVoices.map((voice) => (
+          <motion.div
+            key={voice.id}
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={{ scale: 1.02 }}
+            onClick={() => setSelectedVoice(voice)}
+            className={`relative p-4 rounded-xl cursor-pointer transition-all ${
+              selectedVoice.id === voice.id
+                ? 'bg-primary-500/20 border-2 border-primary-500'
+                : 'bg-gray-800/50 border-2 border-transparent hover:border-gray-600'
+            }`}
+          >
+            {selectedVoice.id === voice.id && (
+              <div className="absolute top-3 right-3">
+                <Check className="w-5 h-5 text-primary-400" />
+              </div>
+            )}
+
+            <div className="flex items-start gap-3">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  playVoicePreview(voice);
+                }}
+                disabled={isPlaying}
+                className="p-2 bg-primary-500/20 rounded-full hover:bg-primary-500/30 disabled:opacity-50"
+              >
+                <Volume2 className="w-5 h-5 text-primary-400" />
+              </button>
+
+              <div className="flex-1">
+                <h3 className="font-semibold text-white mb-1">{voice.displayName}</h3>
+                <p className="text-sm text-gray-400 mb-1">{voice.accent}</p>
+                <p className="text-xs text-gray-500">{voice.description}</p>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex justify-between pt-6 border-t border-gray-700">
+        <button
+          onClick={onBack}
+          className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all"
+        >
+          Back
+        </button>
+        <button
+          onClick={handleContinue}
+          className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-all"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}

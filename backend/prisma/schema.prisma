@@ -45,15 +45,23 @@ model User {
   // LLM preferences
   llmProvider String @default("claude") // "claude" | "gemini" | "openai"
 
+  // Onboarding preferences
+  onboardingCompleted Boolean @default(false)
+  selectedAvatar      String? // "particle" | "wave" | "orb" | "abstract"
+  selectedAvatarColor String? // hex color
+  selectedPersonality String? // "professional" | "friendly" | "energetic" | "calm"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  calendarEvents CalendarEvent[]
-  tasks          Task[]
-  notes          Note[]
-  expenses       Expense[]
-  refreshTokens  RefreshToken[]
+  calendarEvents    CalendarEvent[]
+  tasks             Task[]
+  notes             Note[]
+  expenses          Expense[]
+  refreshTokens     RefreshToken[]
+  conversations     ConversationMessage[]
+  userPreferences   UserPreferences?
 }
 
 model RefreshToken {
@@ -185,6 +193,55 @@ model Expense {
   householdId String    @db.ObjectId
   household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== CONVERSATION & MEMORY ====================
+
+model ConversationMessage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  speaker   String   // "user" | "ai"
+  text      String
+  audioUrl  String?  // Optional: store actual audio file URL
+  
+  tone      String?  // "energetic" | "calm" | "friendly" | "professional"
+  topic     String?  // auto-categorized topic
+  interrupted Boolean @default(false)
+  
+  timestamp DateTime @default(now())
+  
+  // TTL: Auto-delete after 30 days (handled by MongoDB TTL index)
+  expiresAt DateTime @default(now())
+  
+  @@index([userId, timestamp])
+  @@index([expiresAt]) // TTL index
+}
+
+model UserPreferences {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  userId String @unique @db.ObjectId
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Learned interests
+  interests         String[] @default([])  // ["tech", "cooking", "sports"]
+  newsTopics        String[] @default([])  // ["ai", "gaming", "recipes"]
+  
+  // Communication preferences
+  conversationStyle String   @default("balanced") // "brief" | "detailed" | "balanced"
+  preferredTone     String   @default("friendly") // "energetic" | "calm" | "friendly" | "professional"
+  
+  // Activity patterns (learned over time)
+  activeHoursStart  Int?     // Hour (0-23), e.g., 7 for 7 AM
+  activeHoursEnd    Int?     // Hour (0-23), e.g., 22 for 10 PM
+  
+  // Learning progress
+  questionsAsked    String[] @default([])  // Track what we've asked
+  lastUpdated       DateTime @default(now())
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

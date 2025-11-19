@@ -7,6 +7,15 @@ interface User {
   name: string;
   role: 'admin' | 'member';
   householdId: string;
+  voiceName?: string;
+  voicePitch?: number;
+  voiceRate?: number;
+  voiceVolume?: number;
+  llmProvider?: string;
+  onboardingCompleted?: boolean;
+  selectedAvatar?: string;
+  selectedAvatarColor?: string;
+  selectedPersonality?: string;
 }
 
 interface AuthState {
@@ -17,6 +26,7 @@ interface AuthState {
 
   setAuth: (user: User, accessToken: string, refreshToken: string) => void;
   updateAccessToken: (accessToken: string) => void;
+  updateUser: (updates: Partial<User>) => void;
   logout: () => void;
 }
 
@@ -37,6 +47,12 @@ export const useAuthStore = create<AuthState>()(
       updateAccessToken: (accessToken) => {
         localStorage.setItem('accessToken', accessToken);
         set({ accessToken });
+      },
+
+      updateUser: (updates) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, ...updates } : null,
+        }));
       },
 
       logout: () => {

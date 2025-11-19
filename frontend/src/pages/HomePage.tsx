@@ -1,10 +1,20 @@
 import { useAuthStore } from '@/store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '@/lib/api';
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
+import { useState, useEffect } from 'react';
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { user, refreshToken, logout } = useAuthStore();
+  const { user, refreshToken, logout, updateUser } = useAuthStore();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    // Show onboarding if user hasn't completed it
+    if (user && !user.onboardingCompleted) {
+      setShowOnboarding(true);
+    }
+  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -19,8 +29,33 @@ export function HomePage() {
     }
   };
 
+  const handleOnboardingComplete = () => {
+    // Get preferences from localStorage
+    const voiceName = localStorage.getItem('selectedVoice');
+    const selectedAvatar = localStorage.getItem('selectedAvatar');
+    const selectedAvatarColor = localStorage.getItem('selectedAvatarColor');
+    const selectedPersonality = localStorage.getItem('selectedPersonality');
+
+    // Update user in store
+    updateUser({
+      onboardingCompleted: true,
+      voiceName: voiceName || undefined,
+      selectedAvatar: selectedAvatar || undefined,
+      selectedAvatarColor: selectedAvatarColor || undefined,
+      selectedPersonality: selectedPersonality || undefined,
+    });
+
+    // TODO: Send preferences to backend API
+    // await updateUserPreferences({ voiceName, selectedAvatar, ... });
+
+    setShowOnboarding(false);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <>
+      {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
+
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <nav className="bg-white dark:bg-gray-800 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
@@ -115,5 +150,6 @@ export function HomePage() {
         </div>
       </main>
     </div>
+    </>
   );
 }
