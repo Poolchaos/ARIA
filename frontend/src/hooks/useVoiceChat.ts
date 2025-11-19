@@ -12,8 +12,11 @@ export function useVoiceChat() {
   const [isConnected, setIsConnected] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [audioQueue, setAudioQueue] = useState<Blob[]>([]);
+  const [isAIPlaying, setIsAIPlaying] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const isPlayingRef = useRef(false);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fadeIntervalRef = useRef<number | null>(null);
   const { user } = useAuthStore();
 
   // Auto-play audio queue
@@ -23,27 +26,73 @@ export function useVoiceChat() {
     }
 
     isPlayingRef.current = true;
+    setIsAIPlaying(true);
     const audioBlob = audioQueue[0];
     const audioUrl = URL.createObjectURL(audioBlob);
     const audio = new Audio(audioUrl);
+    currentAudioRef.current = audio;
 
     audio.onended = () => {
       URL.revokeObjectURL(audioUrl);
       isPlayingRef.current = false;
+      setIsAIPlaying(false);
+      currentAudioRef.current = null;
       setAudioQueue(prev => prev.slice(1));
     };
 
     audio.onerror = () => {
       URL.revokeObjectURL(audioUrl);
       isPlayingRef.current = false;
+      setIsAIPlaying(false);
+      currentAudioRef.current = null;
       setAudioQueue(prev => prev.slice(1));
     };
 
     audio.play().catch(() => {
       isPlayingRef.current = false;
+      setIsAIPlaying(false);
+      currentAudioRef.current = null;
       setAudioQueue(prev => prev.slice(1));
     });
   }, [audioQueue]);
+
+  // Interrupt AI with smooth fade-out
+  const interruptAI = useCallback(() => {
+    const audio = currentAudioRef.current;
+    if (!audio || audio.paused) return;
+
+    // Clear any existing fade interval
+    if (fadeIntervalRef.current) {
+      clearInterval(fadeIntervalRef.current);
+    }
+
+    // Smooth fade-out over 500ms
+    const startVolume = audio.volume;
+    const fadeSteps = 20;
+    const stepDuration = 500 / fadeSteps;
+    let currentStep = 0;
+
+    fadeIntervalRef.current = window.setInterval(() => {
+      currentStep++;
+      const newVolume = startVolume * (1 - currentStep / fadeSteps);
+
+      if (currentStep >= fadeSteps || newVolume <= 0) {
+        audio.pause();
+        audio.currentTime = 0;
+        if (fadeIntervalRef.current) {
+          clearInterval(fadeIntervalRef.current);
+          fadeIntervalRef.current = null;
+        }
+        isPlayingRef.current = false;
+        setIsAIPlaying(false);
+        currentAudioRef.current = null;
+        // Clear the queue
+        setAudioQueue([]);
+      } else {
+        audio.volume = newVolume;
+      }
+    }, stepDuration);
+  }, []);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -170,13 +219,27 @@ export function useVoiceChat() {
     setMessages([]);
   }, []);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (fadeIntervalRef.current) {
+        clearInterval(fadeIntervalRef.current);
+      }
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+      }
+    };
+  }, []);
+
   return {
     messages,
     isConnected,
     isProcessing,
+    isAIPlaying,
     connect,
     disconnect,
     sendAudio,
     clearMessages,
+    interruptAI,
   };
 }
