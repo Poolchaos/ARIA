@@ -12,6 +12,10 @@ import { verifyAccessToken, verifyRefreshToken } from '../src/utils/jwt';
 
 const prisma = new PrismaClient();
 
+// Test constants - NOT real credentials
+const TEST_PASSWORD = 'SecureTestPass123!';
+const TEST_PASSWORD_ALT = 'AnotherTestPass456!';
+
 describe('Auth Service', () => {
   beforeEach(async () => {
     // Clean database before each test
@@ -31,7 +35,7 @@ describe('Auth Service', () => {
     it('should register new user and create household as admin', async () => {
       const result = await register({
         email: 'test@example.com',
-        password: 'SecurePass123!',
+        password: TEST_PASSWORD,
         name: 'Test User',
       });
 
@@ -70,7 +74,7 @@ describe('Auth Service', () => {
 
       const result = await register({
         email: 'member@example.com',
-        password: 'SecurePass123!',
+        password: TEST_PASSWORD,
         name: 'Member User',
         inviteCode: 'TESTCODE',
       });
@@ -82,14 +86,14 @@ describe('Auth Service', () => {
     it('should reject duplicate email', async () => {
       await register({
         email: 'duplicate@example.com',
-        password: 'Pass123!',
+        password: TEST_PASSWORD,
         name: 'User One',
       });
 
       await expect(
         register({
           email: 'duplicate@example.com',
-          password: 'Pass456!',
+          password: TEST_PASSWORD_ALT,
           name: 'User Two',
         })
       ).rejects.toThrow('User with this email already exists');
@@ -99,7 +103,7 @@ describe('Auth Service', () => {
       await expect(
         register({
           email: 'test@example.com',
-          password: 'Pass123!',
+          password: TEST_PASSWORD,
           name: 'Test User',
           inviteCode: 'INVALID',
         })
@@ -112,7 +116,7 @@ describe('Auth Service', () => {
       // Register user first
       const registered = await register({
         email: 'login@example.com',
-        password: 'SecurePass123!',
+        password: TEST_PASSWORD,
         name: 'Login User',
       });
 
@@ -122,7 +126,7 @@ describe('Auth Service', () => {
       // Login
       const result = await login({
         email: 'login@example.com',
-        password: 'SecurePass123!',
+        password: TEST_PASSWORD,
       });
 
       expect(result.user.id).toBe(registered.user.id);
@@ -160,7 +164,7 @@ describe('Auth Service', () => {
     it('should generate new access token with valid refresh token', async () => {
       const registered = await register({
         email: 'refresh@example.com',
-        password: 'SecurePass123!',
+        password: TEST_PASSWORD,
         name: 'Refresh User',
       });
 
@@ -193,7 +197,7 @@ describe('Auth Service', () => {
     it('should delete refresh token from database', async () => {
       const registered = await register({
         email: 'logout@example.com',
-        password: 'SecurePass123!',
+        password: TEST_PASSWORD,
         name: 'Logout User',
       });
 
