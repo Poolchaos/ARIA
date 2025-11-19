@@ -1,9 +1,5 @@
-import { RegisterForm } from '@/components/auth/RegisterForm';
+import { ParticleAuth } from '../components/auth/ParticleAuth';
 
 export function RegisterPage() {
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-      <RegisterForm />
-    </div>
-  );
+  return <ParticleAuth mode="register" />;
 }

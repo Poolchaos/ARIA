@@ -1,9 +1,5 @@
-import { LoginForm } from '@/components/auth/LoginForm';
+import { ParticleAuth } from '../components/auth/ParticleAuth';
 
 export function LoginPage() {
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-      <LoginForm />
-    </div>
-  );
+  return <ParticleAuth mode="login" />;
 }
