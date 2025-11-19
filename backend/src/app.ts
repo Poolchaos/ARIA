@@ -51,3 +51,6 @@ export const createApp = (): Express => {
 
   return app;
 };
+
+// Export default app instance for testing
+export const app = createApp();
