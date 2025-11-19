@@ -1,0 +1,190 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USER & HOUSEHOLD ====================
+
+model Household {
+  id           String   @id @default(cuid())
+  name         String
+  inviteCode   String   @unique
+  createdById  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  members        User[]
+  calendarEvents CalendarEvent[]
+  shoppingLists  ShoppingList[]
+  budgets        Budget[]
+  expenses       Expense[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("member") // "admin" | "member"
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id])
+
+  // Voice preferences
+  voiceName   String? // "Google UK English Female"
+  voicePitch  Float   @default(1.0)
+  voiceRate   Float   @default(1.0)
+  voiceVolume Float   @default(1.0)
+
+  // LLM preferences
+  llmProvider String @default("claude") // "claude" | "gemini" | "openai"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  calendarEvents CalendarEvent[]
+  tasks          Task[]
+  notes          Note[]
+  expenses       Expense[]
+  refreshTokens  RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ==================== CALENDAR ====================
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  isShared    Boolean  @default(false) // true = family, false = personal
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  householdId String?
+  household   Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  reminder Int? // Minutes before event (e.g., 10)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== TASKS ====================
+
+model Task {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  dueDate     DateTime?
+  priority    String    @default("medium") // "high" | "medium" | "low"
+  status      String    @default("pending") // "pending" | "completed"
+  isShared    Boolean   @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  assignedTo String? // User ID (for shared tasks)
+
+  recurring String? // "daily" | "weekly" | "monthly"
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+}
+
+// ==================== NOTES ====================
+
+model Note {
+  id      String @id @default(cuid())
+  content String
+  tags    String // Comma-separated: "work,api,refactor"
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== SHOPPING ====================
+
+model ShoppingList {
+  id          String   @id @default(cuid())
+  name        String   @default("Household Shopping")
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  items ShoppingItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ShoppingItem {
+  id          String  @id @default(cuid())
+  item        String
+  category    String  @default("miscellaneous")
+  quantity    Int     @default(1)
+  isPurchased Boolean @default(false)
+
+  listId String
+  list   ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  addedBy String // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== BUDGET ====================
+
+model Budget {
+  id           String @id @default(cuid())
+  category     String
+  monthlyLimit Float
+  month        String // "2025-11" (YYYY-MM format)
+
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([householdId, category, month])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  amount      Float
+  currency    String   @default("ZAR") // South African Rand
+  category    String
+  description String?
+  date        DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

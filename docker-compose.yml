@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  frontend:
+    container_name: aria_frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3004:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5001
+      - VITE_WS_URL=ws://localhost:5001
+    depends_on:
+      - backend
+    networks:
+      - aria_network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  backend:
+    container_name: aria_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5000"
+    environment:
+      - DATABASE_URL=file:/data/aria.db
+      - REDIS_URL=redis://redis:6379
+      - AGENT_URL=http://agent:8000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - NODE_ENV=${NODE_ENV:-development}
+    volumes:
+      - ./data:/data
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - agent
+      - redis
+    networks:
+      - aria_network
+
+  agent:
+    container_name: aria_agent
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - BACKEND_URL=http://backend:5000
+    volumes:
+      - ./agent:/app
+    networks:
+      - aria_network
+
+  redis:
+    container_name: aria_redis
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aria_network
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+
+networks:
+  aria_network:
+    driver: bridge
