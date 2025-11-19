@@ -11,13 +11,15 @@ ARIA is a self-hosted voice assistant designed for small households (2-5 members
 
 ## Features
 
-- **Voice-First Interaction:** Talk to ARIA naturally, get spoken responses
+- **Voice-First Interaction:** Talk to ARIA naturally, get spoken responses with natural neural voices
+- **Audio-Reactive Particles:** Dynamic soundwave visualization synced to ARIA's voice in real-time
 - **Multi-User Support:** Separate personal data, shared household resources
 - **Privacy-First:** Self-hosted on your server, zero telemetry, you own your data
+- **Azure TTS Integration:** Natural human-like voice (optional, free tier) or Web Speech API fallback
 - **Multi-LLM Support:** Choose Claude, Gemini, OpenAI, or local models (Ollama)
 - **Household Coordination:** Shared calendars, shopping lists, budget tracking
 - **Personal Productivity:** Tasks, notes, break reminders, focus sessions
-- **Beautiful UI:** Mobile-first web app, animated particle face, light/dark themes
+- **Beautiful UI:** Mobile-first web app, animated particle system, light/dark themes
 
 ## Tech Stack
 
@@ -35,16 +37,77 @@ cd ARIA
 
 # Setup environment
 cp .env.example .env
-# Edit .env with your API keys (Claude, Gemini, or OpenAI)
+# Edit .env with your API keys (see Configuration section below)
 
 # Launch with Docker
 docker-compose up -d
 
 # Access ARIA
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:5000
-# Python Agent: http://localhost:8000
+# Frontend: http://localhost:3004
+# Backend API: http://localhost:5001
+# Python Agent: http://localhost:8002
 ```
+
+## Configuration
+
+### Required Environment Variables
+
+**Backend (.env in root):**
+```bash
+# MongoDB
+MONGODB_URI=mongodb://localhost:27019/aria?replicaSet=rs0
+
+# JWT Secrets
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_REFRESH_SECRET=your-super-secret-refresh-key-change-this-too
+
+# Redis
+REDIS_URL=redis://localhost:6381
+```
+
+**Frontend (.env in frontend/):**
+```bash
+# API Endpoint
+VITE_API_URL=http://localhost:5001
+
+# Azure TTS (Optional - for natural voice synthesis)
+VITE_AZURE_SPEECH_KEY=your-azure-speech-key
+VITE_AZURE_SPEECH_REGION=eastus
+
+# Voice Settings (Fallback to Web Speech API if Azure not configured)
+VITE_VOICE_ENABLED=true
+```
+
+### Azure TTS Setup (Optional but Recommended)
+
+Azure Cognitive Services Text-to-Speech provides natural, human-like voice for ARIA instead of robotic Web Speech API.
+
+**Free Tier:** 5 million characters/month (~16,000 interactions)
+
+**Setup Steps:**
+
+1. **Create Azure Account:** https://azure.microsoft.com/free/
+2. **Create Speech Service:**
+   - Go to Azure Portal → Create Resource → Search "Speech"
+   - Create new Speech Services resource
+   - Choose Free (F0) pricing tier
+   - Select region (e.g., `eastus`)
+3. **Get Credentials:**
+   - Go to your Speech resource → Keys and Endpoint
+   - Copy `KEY 1` and `LOCATION/REGION`
+4. **Add to .env:**
+   ```bash
+   VITE_AZURE_SPEECH_KEY=your-key-here
+   VITE_AZURE_SPEECH_REGION=eastus
+   ```
+
+**Without Azure:** ARIA automatically falls back to browser's Web Speech API (works but sounds robotic).
+
+**Features with Azure:**
+- Natural neural voices (Jenny Neural - warm, friendly female)
+- Emotional expression (cheerful, empathetic, calm)
+- Audio-reactive particle visualization synced to voice
+- SSML control for rate, pitch, volume
 
 ## Documentation
 
@@ -62,13 +125,15 @@ docker-compose up -d
 - ✅ Tailwind CSS v4 with custom theme
 - ✅ Backend integration tests (15/15 passing)
 
-**Phase 0.5: Gamified Onboarding** ✅ **COMPLETED**
-- ✅ 5-step interactive onboarding with animations
-- ✅ AI voice welcome with auto-play
-- ✅ Voice selection (8 voices with previews)
-- ✅ Avatar selection (8 animated styles)
-- ✅ Personality selection (4 traits)
-- ✅ Particle visualization with audio reactivity
+**Phase 0.75: Particle Voice Authentication** ✅ **COMPLETED**
+- ✅ Particle-based login/register with voice guidance
+- ✅ 5 dynamic particle formations (soundwave, field, button, loading, scattered)
+- ✅ Azure TTS integration with neural voices (optional, free tier)
+- ✅ Audio-reactive soundwave visualization (12-bar equalizer)
+- ✅ Web Audio API frequency analysis in real-time
+- ✅ Voice permission modal with localStorage persistence
+- ✅ Smooth state machine with conversational prompts
+- ✅ Emotion-based speech modulation (happy, calm, empathetic)
 
 **Phase 1: Enhanced Voice Interface** 🚧 **IN PROGRESS**
 - 🚧 Voice Activity Detection (VAD) for interrupts
