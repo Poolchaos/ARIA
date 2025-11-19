@@ -10,7 +10,7 @@ export function VoicePermissionModal({ onRequestPermission, onDismiss }: VoicePe
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
         <motion.div
-          className="bg-dark-300 rounded-2xl p-8 max-w-md mx-4 border-2 border-primary-500/30 shadow-2xl"
+          className="bg-dark-300 rounded-2xl p-8 max-w-md mx-4 border-2 border-primary-500/30 shadow-xl"
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}

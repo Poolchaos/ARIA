@@ -38,10 +38,15 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   useEffect(() => {
     dispatch({ type: mode === 'login' ? 'START_LOGIN' : 'START_REGISTER' });
     
-    // Check if we should show voice permission modal
+    // Check voice preference from localStorage
     const hasSeenVoiceModal = localStorage.getItem('aria_voice_modal_seen');
-    if (!hasSeenVoiceModal && 'speechSynthesis' in window) {
-      // Small delay to let the page load
+    const voicePreference = localStorage.getItem('aria_voice_enabled');
+    
+    if (hasSeenVoiceModal && voicePreference === 'true') {
+      // User has previously enabled voice
+      setVoiceEnabled(true);
+    } else if (!hasSeenVoiceModal && 'speechSynthesis' in window) {
+      // First time user - show permission modal
       const timer = setTimeout(() => {
         setShowVoicePermissionModal(true);
       }, 500);
@@ -216,12 +221,14 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
     setVoiceEnabled(true);
     setShowVoicePermissionModal(false);
     localStorage.setItem('aria_voice_modal_seen', 'true');
+    localStorage.setItem('aria_voice_enabled', 'true');
   };
 
   const handleSkipVoice = () => {
     setVoiceEnabled(false);
     setShowVoicePermissionModal(false);
     localStorage.setItem('aria_voice_modal_seen', 'true');
+    localStorage.setItem('aria_voice_enabled', 'false');
   };
 
   const handleVoicePermissionDenied = () => {
@@ -255,6 +262,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             key={currentState}
             text={voicePrompt.text}
             emotion={voicePrompt.emotion}
+            autoSpeak={voiceEnabled}
             onPermissionDenied={handleVoicePermissionDenied}
           />
         )}
