@@ -22,6 +22,9 @@ out/
 .env.local
 .env.*.local
 
+# Keep .env.example
+!.env.example
+
 # Database
 *.db
 *.db-journal

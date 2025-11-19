@@ -1,4 +1,24 @@
-# Stage 1: Build
+# Stage 1: Development
+FROM node:20-alpine AS development
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev)
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Expose Vite dev server port
+EXPOSE 5173
+
+# Development command (will be overridden by docker-compose)
+CMD ["npm", "run", "dev", "--", "--host"]
+
+# Stage 2: Build
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -15,8 +35,8 @@ COPY . .
 # Build production bundle
 RUN npm run build
 
-# Stage 2: Nginx serve
-FROM nginx:alpine
+# Stage 3: Nginx serve
+FROM nginx:alpine AS production
 
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
