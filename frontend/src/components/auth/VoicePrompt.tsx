@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { ParticleEmotion } from './AuthStateMachine';
+import AzureTTSService, { type Emotion } from '../../services/azureTTS';
 
 interface VoicePromptProps {
   text: string;
@@ -8,173 +9,125 @@ interface VoicePromptProps {
   onComplete?: () => void;
   autoSpeak?: boolean;
   onPermissionDenied?: () => void;
+  onAudioAnalyser?: (analyser: AnalyserNode | null) => void;
+  voiceEnabled?: boolean;
 }
 
-// Voice synthesis utility
-class VoiceSynthesizer {
-  private synth: SpeechSynthesis | null = null;
-  private currentUtterance: SpeechSynthesisUtterance | null = null;
-  private voice: SpeechSynthesisVoice | null = null;
-  private permissionGranted: boolean = false;
-  private permissionRequested: boolean = false;
+// Singleton Azure TTS instance
+let azureTTS: AzureTTSService | null = null;
 
-  constructor() {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      this.synth = window.speechSynthesis;
-      this.loadVoice();
+function getAzureTTS(): AzureTTSService {
+  if (!azureTTS) {
+    const subscriptionKey = import.meta.env.VITE_AZURE_SPEECH_KEY || '';
+    const region = import.meta.env.VITE_AZURE_SPEECH_REGION || 'eastus';
+
+    if (!subscriptionKey) {
+      console.warn('Azure Speech key not configured, voice will be disabled');
     }
+
+    azureTTS = new AzureTTSService({ subscriptionKey, region });
   }
+  return azureTTS;
+}
 
-  private loadVoice() {
-    if (!this.synth) return;
-
-    const loadVoices = () => {
-      const voices = this.synth!.getVoices();
-
-      // Prefer natural-sounding voices
-      const preferredVoices = [
-        'Microsoft Zira - English (United States)',
-        'Google US English',
-        'Samantha',
-        'Karen',
-        'Daniel',
-      ];
-
-      for (const preferred of preferredVoices) {
-        const voice = voices.find((v) => v.name.includes(preferred));
-        if (voice) {
-          this.voice = voice;
-          return;
-        }
-      }
-
-      // Fallback to first English voice
-      this.voice = voices.find((v) => v.lang.startsWith('en')) || voices[0] || null;
-    };
-
-    if (this.synth.getVoices().length > 0) {
-      loadVoices();
-    } else {
-      this.synth.addEventListener('voiceschanged', loadVoices);
-    }
-  }
-
-  speak(text: string, emotion: ParticleEmotion, onComplete?: () => void, onError?: (error: string) => void) {
-    if (!this.synth || !text) return;
-
-    // Cancel any ongoing speech
-    this.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-
-    if (this.voice) {
-      utterance.voice = this.voice;
-    }
-
-    // Adjust speech parameters based on emotion
-    switch (emotion) {
-      case 'happy':
-      case 'success':
-        utterance.rate = 1.1;
-        utterance.pitch = 1.2;
-        utterance.volume = 1.0;
-        break;
-      case 'error':
-        utterance.rate = 0.9;
-        utterance.pitch = 0.8;
-        utterance.volume = 0.9;
-        break;
-      case 'listening':
-        utterance.rate = 1.0;
-        utterance.pitch = 1.1;
-        utterance.volume = 0.95;
-        break;
-      case 'idle':
-      default:
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.volume = 0.9;
-        break;
-    }
-
-    utterance.onend = () => {
-      this.currentUtterance = null;
-      onComplete?.();
-    };
-
-    utterance.onerror = (event) => {
-      console.error('Speech synthesis error:', event);
-      this.currentUtterance = null;
-      
-      if (event.error === 'not-allowed') {
-        this.permissionGranted = false;
-        onError?.('not-allowed');
-      }
-      
-      onComplete?.();
-    };
-
-    this.currentUtterance = utterance;
-    this.synth.speak(utterance);
-  }
-
-  cancel() {
-    if (this.synth) {
-      this.synth.cancel();
-      this.currentUtterance = null;
-    }
-  }
-
-  isSpeaking(): boolean {
-    return this.synth?.speaking || false;
+// Map particle emotions to Azure emotions
+function mapEmotion(emotion: ParticleEmotion): Emotion {
+  switch (emotion) {
+    case 'happy':
+    case 'success':
+      return 'happy';
+    case 'error':
+      return 'sad';
+    case 'listening':
+      return 'calm';
+    case 'idle':
+    default:
+      return 'neutral';
   }
 }
 
-// Singleton instance
-let voiceSynthesizer: VoiceSynthesizer | null = null;
-
-function getVoiceSynthesizer(): VoiceSynthesizer {
-  if (!voiceSynthesizer) {
-    voiceSynthesizer = new VoiceSynthesizer();
-  }
-  return voiceSynthesizer;
-}
-
-export function VoicePrompt({ text, emotion, onComplete, autoSpeak = true, onPermissionDenied }: VoicePromptProps) {
+export function VoicePrompt({
+  text,
+  emotion,
+  onComplete,
+  autoSpeak = true,
+  onPermissionDenied,
+  onAudioAnalyser,
+  voiceEnabled = true
+}: VoicePromptProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [permissionError, setPermissionError] = useState(false);
   const hasSpokenRef = useRef(false);
+  const currentAudioRef = useRef<{ stop: () => void } | null>(null);
 
   useEffect(() => {
-    if (autoSpeak && text && !hasSpokenRef.current) {
-      hasSpokenRef.current = true;
-      const synth = getVoiceSynthesizer();
-      
-      // Small delay for better UX
-      const timer = setTimeout(() => {
-        setIsSpeaking(true);
-        synth.speak(text, emotion, () => {
-          setIsSpeaking(false);
-          onComplete?.();
-        }, (error) => {
-          if (error === 'not-allowed') {
-            setPermissionError(true);
-            onPermissionDenied?.();
-          }
-          setIsSpeaking(false);
-        });
-      }, 300);      return () => {
-        clearTimeout(timer);
-        synth.cancel();
-        setIsSpeaking(false);
-      };
+    if (!voiceEnabled || !autoSpeak || !text || hasSpokenRef.current) {
+      return;
     }
-  }, [text, emotion, autoSpeak, onComplete]);
+
+    hasSpokenRef.current = true;
+    const tts = getAzureTTS();
+
+    const speakAsync = async () => {
+      try {
+        // Synthesize speech
+        const azureEmotion = mapEmotion(emotion);
+        const speechOptions = {
+          text,
+          emotion: azureEmotion,
+          rate: emotion === 'happy' ? 1.1 : emotion === 'error' ? 0.9 : 1.0,
+          pitch: emotion === 'happy' ? 10 : emotion === 'error' ? -10 : 0,
+        };
+
+        const audio = await tts.synthesize(speechOptions);
+        currentAudioRef.current = audio;
+
+        // Small delay for better UX
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Play and get analyser for visualization
+        setIsSpeaking(true);
+        const analyser = await audio.play();
+
+        // Pass analyser to parent for visualization
+        onAudioAnalyser?.(analyser);
+
+        // Wait for playback to complete
+        const duration = audio.audio.duration * 1000;
+        await new Promise(resolve => setTimeout(resolve, duration));
+
+        // Clean up
+        setIsSpeaking(false);
+        onAudioAnalyser?.(null);
+        currentAudioRef.current = null;
+        onComplete?.();
+
+      } catch (error) {
+        console.error('Azure TTS error:', error);
+        setIsSpeaking(false);
+        onAudioAnalyser?.(null);
+        onPermissionDenied?.();
+
+        // Fallback to browser speech synthesis if Azure fails
+        fallbackToWebSpeech(text, emotion, onComplete);
+      }
+    };
+
+    speakAsync();
+
+    return () => {
+      // Clean up on unmount
+      if (currentAudioRef.current) {
+        currentAudioRef.current.stop();
+        currentAudioRef.current = null;
+      }
+      setIsSpeaking(false);
+      onAudioAnalyser?.(null);
+    };
+  }, [text, emotion, autoSpeak, voiceEnabled, onComplete, onAudioAnalyser, onPermissionDenied]);
 
   // Reset spoken flag when text changes
   useEffect(() => {
     hasSpokenRef.current = false;
-    setPermissionError(false);
   }, [text]);
 
   if (!text) return null;
@@ -233,19 +186,34 @@ export function VoicePrompt({ text, emotion, onComplete, autoSpeak = true, onPer
   );
 }
 
-// Export utility for manual control
-export function useVoiceSynthesis() {
-  const synth = getVoiceSynthesizer();
+// Fallback to browser Web Speech API if Azure fails
+function fallbackToWebSpeech(text: string, emotion: ParticleEmotion, onComplete?: () => void) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    onComplete?.();
+    return;
+  }
 
-  return {
-    speak: (text: string, emotion: ParticleEmotion = 'idle', onComplete?: () => void, onError?: (error: string) => void) => {
-      synth.speak(text, emotion, onComplete, onError);
-    },
-    cancel: () => {
-      synth.cancel();
-    },
-    isSpeaking: () => {
-      return synth.isSpeaking();
-    },
-  };
+  const synth = window.speechSynthesis;
+  const utterance = new SpeechSynthesisUtterance(text);
+
+  // Adjust parameters based on emotion
+  switch (emotion) {
+    case 'happy':
+    case 'success':
+      utterance.rate = 1.1;
+      utterance.pitch = 1.2;
+      break;
+    case 'error':
+      utterance.rate = 0.9;
+      utterance.pitch = 0.8;
+      break;
+    default:
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+  }
+
+  utterance.onend = () => onComplete?.();
+  utterance.onerror = () => onComplete?.();
+
+  synth.speak(utterance);
 }

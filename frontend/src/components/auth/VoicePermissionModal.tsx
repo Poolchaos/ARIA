@@ -37,7 +37,7 @@ export function VoicePermissionModal({ onRequestPermission, onDismiss }: VoicePe
             Enable Voice Guidance
           </h2>
           <p className="text-gray-300 text-center mb-6 leading-relaxed">
-            ARIA uses voice synthesis to guide you through authentication. 
+            ARIA uses voice synthesis to guide you through authentication.
             Click "Enable Voice" to hear AI prompts for each step.
           </p>
 

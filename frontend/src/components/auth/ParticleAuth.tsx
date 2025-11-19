@@ -7,6 +7,7 @@ import { VoicePermissionModal } from './VoicePermissionModal';
 import { useAuthStateMachine } from './AuthStateMachine';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
+import { useAudioAnalyser } from '../../hooks/useAudioAnalyser';
 import confetti from 'canvas-confetti';
 import { authApi } from '../../lib/api';
 
@@ -20,6 +21,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   const [audioLevel] = useState(0);
   const [showVoicePermissionModal, setShowVoicePermissionModal] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const { audioData, setAnalyser } = useAudioAnalyser();
 
   const {
     currentState,
@@ -37,11 +39,11 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   // Initialize mode
   useEffect(() => {
     dispatch({ type: mode === 'login' ? 'START_LOGIN' : 'START_REGISTER' });
-    
+
     // Check voice preference from localStorage
     const hasSeenVoiceModal = localStorage.getItem('aria_voice_modal_seen');
     const voicePreference = localStorage.getItem('aria_voice_enabled');
-    
+
     if (hasSeenVoiceModal && voicePreference === 'true') {
       // User has previously enabled voice
       setVoiceEnabled(true);
@@ -244,6 +246,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
           formation={getParticleFormation()}
           emotion={getParticleEmotion()}
           audioLevel={audioLevel}
+          audioData={audioData}
         />
       </div>
 
@@ -263,7 +266,9 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             text={voicePrompt.text}
             emotion={voicePrompt.emotion}
             autoSpeak={voiceEnabled}
+            voiceEnabled={voiceEnabled}
             onPermissionDenied={handleVoicePermissionDenied}
+            onAudioAnalyser={setAnalyser}
           />
         )}
       </AnimatePresence>

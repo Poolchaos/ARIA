@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import type { AudioData } from '../../hooks/useAudioAnalyser';
 
 interface Particle {
   id: number;
@@ -20,6 +21,7 @@ interface ParticleCanvasProps {
   formation?: ParticleFormation;
   emotion?: ParticleEmotion;
   audioLevel?: number;
+  audioData?: AudioData | null;
   className?: string;
 }
 
@@ -27,6 +29,7 @@ export function ParticleCanvas({
   formation = 'face',
   emotion = 'idle',
   audioLevel = 0,
+  audioData = null,
   className = '',
 }: ParticleCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,19 +49,28 @@ export function ParticleCanvas({
       const barIndex = Math.floor((i / particles.length) * barCount);
       const particlesPerBar = particles.length / barCount;
       const positionInBar = (i % particlesPerBar) / particlesPerBar;
-      
-      // Staggered wave effect - each bar has different height
-      const waveOffset = Math.sin(barIndex * 0.8 + timeRef.current * 0.03) * 0.5 + 0.5;
-      const barHeight = maxHeight * (0.3 + waveOffset * 0.7);
-      
+
+      // Use real audio data if available, otherwise fallback to sine wave
+      let barHeight: number;
+      if (audioData && audioData.frequencies.length > 0) {
+        // Map bar index to frequency bin
+        const freqIndex = Math.floor((barIndex / barCount) * audioData.frequencies.length);
+        const freqValue = audioData.frequencies[freqIndex] / 255; // Normalize to 0-1
+        barHeight = maxHeight * (0.2 + freqValue * 0.8); // 20% minimum + up to 80% reactive
+      } else {
+        // Fallback: Staggered wave effect - each bar has different height
+        const waveOffset = Math.sin(barIndex * 0.8 + timeRef.current * 0.03) * 0.5 + 0.5;
+        barHeight = maxHeight * (0.3 + waveOffset * 0.7);
+      }
+
       // X position: centered bars with gaps
       p.targetX = cx - totalWidth / 2 + barIndex * barWidth + (barWidth / 2);
-      
+
       // Y position: stack particles vertically in each bar
       const particleY = cy + (maxHeight / 2) - (positionInBar * barHeight);
       p.targetY = particleY;
     });
-  }, [emotion]);
+  }, [audioData]);
 
   const calculateFieldFormation = useCallback((particles: Particle[], cx: number, cy: number) => {
     const width = 400;
