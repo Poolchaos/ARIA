@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { ParticleCanvas } from './ParticleCanvas';
+import { ParticleWave } from './ParticleWave';
 import { ParticleInput } from './ParticleInput';
 import { VoicePrompt } from './VoicePrompt';
 import { VoicePermissionModal } from './VoicePermissionModal';
 import { useAuthStateMachine } from './AuthStateMachine';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
-import { useAudioAnalyser } from '../../hooks/useAudioAnalyser';
 import confetti from 'canvas-confetti';
 import { authApi } from '../../lib/api';
 
@@ -18,10 +17,9 @@ interface ParticleAuthProps {
 export function ParticleAuth({ mode }: ParticleAuthProps) {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
-  const [audioLevel] = useState(0);
   const [showVoicePermissionModal, setShowVoicePermissionModal] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
-  const { audioData, setAnalyser } = useAudioAnalyser();
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const {
     currentState,
@@ -240,13 +238,11 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
   return (
     <div className="relative w-full h-screen bg-dark-200 overflow-hidden">
-      {/* Particle Canvas Background */}
+      {/* Particle Wave Background */}
       <div className="absolute inset-0">
-        <ParticleCanvas
-          formation={getParticleFormation()}
+        <ParticleWave
+          isSpeaking={isSpeaking}
           emotion={getParticleEmotion()}
-          audioLevel={audioLevel}
-          audioData={audioData}
         />
       </div>
 
@@ -268,7 +264,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             autoSpeak={voiceEnabled}
             voiceEnabled={voiceEnabled}
             onPermissionDenied={handleVoicePermissionDenied}
-            onAudioAnalyser={setAnalyser}
+            onSpeakingChange={setIsSpeaking}
           />
         )}
       </AnimatePresence>

@@ -50,17 +50,29 @@ export function ParticleCanvas({
       const particlesPerBar = particles.length / barCount;
       const positionInBar = (i % particlesPerBar) / particlesPerBar;
 
-      // Use real audio data if available, otherwise fallback to sine wave
+      // Use real audio data if available, otherwise create animated effect
       let barHeight: number;
       if (audioData && audioData.frequencies.length > 0) {
-        // Map bar index to frequency bin
+        // Real audio: Map bar index to frequency bin
         const freqIndex = Math.floor((barIndex / barCount) * audioData.frequencies.length);
-        const freqValue = audioData.frequencies[freqIndex] / 255; // Normalize to 0-1
-        barHeight = maxHeight * (0.2 + freqValue * 0.8); // 20% minimum + up to 80% reactive
+        const freqValue = audioData.frequencies[freqIndex] / 255;
+        barHeight = maxHeight * (0.2 + freqValue * 0.8);
       } else {
-        // Fallback: Staggered wave effect - each bar has different height
-        const waveOffset = Math.sin(barIndex * 0.8 + timeRef.current * 0.03) * 0.5 + 0.5;
-        barHeight = maxHeight * (0.3 + waveOffset * 0.7);
+        // Animated simulation: Create realistic-looking wave motion
+        const time = timeRef.current;
+
+        // Multiple sine waves for natural look
+        const primary = Math.sin(barIndex * 0.5 + time * 0.02) * 0.5 + 0.5;
+        const secondary = Math.sin(barIndex * 0.3 - time * 0.015) * 0.3 + 0.5;
+        const tertiary = Math.sin(barIndex * 0.8 + time * 0.025) * 0.2 + 0.5;
+
+        // Combine waves for complex motion
+        const combined = (primary * 0.5 + secondary * 0.3 + tertiary * 0.2);
+
+        // Add variation per bar (some bars move more than others)
+        const barVariation = Math.sin(barIndex * 1.2) * 0.15 + 0.85;
+
+        barHeight = maxHeight * (0.25 + combined * 0.75 * barVariation);
       }
 
       // X position: centered bars with gaps

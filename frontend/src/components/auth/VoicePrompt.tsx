@@ -11,6 +11,7 @@ interface VoicePromptProps {
   onPermissionDenied?: () => void;
   onAudioAnalyser?: (analyser: AnalyserNode | null) => void;
   voiceEnabled?: boolean;
+  onSpeakingChange?: (isSpeaking: boolean) => void;
 }
 
 // Singleton Azure TTS instance
@@ -53,11 +54,18 @@ export function VoicePrompt({
   autoSpeak = true,
   onPermissionDenied,
   onAudioAnalyser,
-  voiceEnabled = true
+  voiceEnabled = true,
+  onSpeakingChange
 }: VoicePromptProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const hasSpokenRef = useRef(false);
   const currentAudioRef = useRef<{ stop: () => void } | null>(null);
+
+  // Update parent when speaking state changes
+  const updateSpeaking = (speaking: boolean) => {
+    setIsSpeaking(speaking);
+    onSpeakingChange?.(speaking);
+  };
 
   useEffect(() => {
     if (!voiceEnabled || !autoSpeak || !text || hasSpokenRef.current) {
@@ -65,65 +73,81 @@ export function VoicePrompt({
     }
 
     hasSpokenRef.current = true;
-    const tts = getAzureTTS();
 
-    const speakAsync = async () => {
-      try {
-        // Synthesize speech
-        const azureEmotion = mapEmotion(emotion);
-        const speechOptions = {
-          text,
-          emotion: azureEmotion,
-          rate: emotion === 'happy' ? 1.1 : emotion === 'error' ? 0.9 : 1.0,
-          pitch: emotion === 'happy' ? 10 : emotion === 'error' ? -10 : 0,
-        };
+    // Check if Azure is configured
+    const azureKey = import.meta.env.VITE_AZURE_SPEECH_KEY;
+    const hasAzure = azureKey && azureKey !== 'your_azure_speech_key_here' && azureKey.length > 10;
 
-        const audio = await tts.synthesize(speechOptions);
-        currentAudioRef.current = audio;
+    if (hasAzure) {
+      // Use Azure TTS
+      const tts = getAzureTTS();
+      const speakAsync = async () => {
+        try {
+          const azureEmotion = mapEmotion(emotion);
+          const speechOptions = {
+            text,
+            emotion: azureEmotion,
+            rate: emotion === 'happy' ? 1.1 : emotion === 'error' ? 0.9 : 1.0,
+            pitch: emotion === 'happy' ? 10 : emotion === 'error' ? -10 : 0,
+          };
 
-        // Small delay for better UX
-        await new Promise(resolve => setTimeout(resolve, 300));
+          const audio = await tts.synthesize(speechOptions);
+          currentAudioRef.current = audio;
 
-        // Play and get analyser for visualization
-        setIsSpeaking(true);
-        const analyser = await audio.play();
+          await new Promise(resolve => setTimeout(resolve, 300));
 
-        // Pass analyser to parent for visualization
-        onAudioAnalyser?.(analyser);
+          updateSpeaking(true);
+          const analyser = await audio.play();
+          onAudioAnalyser?.(analyser);
 
-        // Wait for playback to complete
-        const duration = audio.audio.duration * 1000;
-        await new Promise(resolve => setTimeout(resolve, duration));
+          const duration = audio.audio.duration * 1000;
+          await new Promise(resolve => setTimeout(resolve, duration));
 
-        // Clean up
-        setIsSpeaking(false);
-        onAudioAnalyser?.(null);
-        currentAudioRef.current = null;
-        onComplete?.();
+          updateSpeaking(false);
+          onAudioAnalyser?.(null);
+          currentAudioRef.current = null;
+          onComplete?.();
 
-      } catch (error) {
-        console.error('Azure TTS error:', error);
-        setIsSpeaking(false);
-        onAudioAnalyser?.(null);
-        onPermissionDenied?.();
+        } catch (error) {
+          console.error('Azure TTS error:', error);
+          updateSpeaking(false);
+          onAudioAnalyser?.(null);
+          // Don't fallback - just complete
+          onComplete?.();
+        }
+      };
+      speakAsync();
+    } else {
+      // Use Web Speech API directly (no Azure)
+      const timer = setTimeout(() => {
+        updateSpeaking(true);
+        fallbackToWebSpeech(text, emotion, () => {
+          updateSpeaking(false);
+          onComplete?.();
+        });
+      }, 300);
 
-        // Fallback to browser speech synthesis if Azure fails
-        fallbackToWebSpeech(text, emotion, onComplete);
-      }
-    };
-
-    speakAsync();
-
-    return () => {
-      // Clean up on unmount
+      return () => {
+        clearTimeout(timer);
+        // Clean up on unmount - cancel any speech
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+          window.speechSynthesis.cancel(); // Stop Web Speech API
+        }
+        updateSpeaking(false);
+      };
+    }    return () => {
+      // Clean up on unmount - cancel any speech
       if (currentAudioRef.current) {
         currentAudioRef.current.stop();
         currentAudioRef.current = null;
       }
-      setIsSpeaking(false);
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop Web Speech API
+      }
+      updateSpeaking(false);
       onAudioAnalyser?.(null);
     };
-  }, [text, emotion, autoSpeak, voiceEnabled, onComplete, onAudioAnalyser, onPermissionDenied]);
+  }, [text, emotion, autoSpeak, voiceEnabled, onComplete, onAudioAnalyser]);
 
   // Reset spoken flag when text changes
   useEffect(() => {
@@ -194,6 +218,10 @@ function fallbackToWebSpeech(text: string, emotion: ParticleEmotion, onComplete?
   }
 
   const synth = window.speechSynthesis;
+
+  // Cancel any previous speech first
+  synth.cancel();
+
   const utterance = new SpeechSynthesisUtterance(text);
 
   // Adjust parameters based on emotion
