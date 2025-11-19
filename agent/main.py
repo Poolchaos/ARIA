@@ -43,7 +43,7 @@ async def health_check():
 async def chat(request: ChatRequest):
     """
     Process user message and return AI response
-    
+
     TODO: Implement LLM integration with tool calling
     - Load conversation context from Redis
     - Call appropriate LLM provider (Claude/Gemini/OpenAI)
@@ -73,7 +73,7 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run(
         "main:app",
