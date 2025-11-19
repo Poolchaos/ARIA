@@ -190,16 +190,16 @@ export function VoicePrompt({ text, emotion, onComplete, autoSpeak = true, onPer
       <div
         className={`
           px-6 py-3 rounded-full
-          bg-dark-300/80 backdrop-blur-md
-          border-2 transition-all duration-300
+          bg-gray-900/95 backdrop-blur-md
+          border-2 transition-all duration-300 shadow-lg
           ${
             emotion === 'error'
-              ? 'border-red-500/50'
+              ? 'border-red-500/70 shadow-red-500/20'
               : emotion === 'success'
-                ? 'border-green-500/50'
+                ? 'border-green-500/70 shadow-green-500/20'
                 : emotion === 'listening'
-                  ? 'border-primary-500/50'
-                  : 'border-gray-700/50'
+                  ? 'border-primary-500/70 shadow-primary-500/20'
+                  : 'border-gray-600/50'
           }
         `}
       >
@@ -226,7 +226,7 @@ export function VoicePrompt({ text, emotion, onComplete, autoSpeak = true, onPer
           )}
 
           {/* Prompt text */}
-          <p className="text-sm font-medium text-gray-100">{text}</p>
+          <p className="text-sm font-semibold text-white">{text}</p>
         </div>
       </div>
     </motion.div>

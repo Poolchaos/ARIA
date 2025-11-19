@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  /* Primary color palette */
   --color-primary-50: #f0f9ff;
   --color-primary-100: #e0f2fe;
   --color-primary-200: #bae6fd;
@@ -12,11 +13,51 @@
   --color-primary-800: #075985;
   --color-primary-900: #0c4a6e;
 
+  /* Dark theme colors */
+  --color-dark-100: #1e293b;
+  --color-dark-200: #0f172a;
+  --color-dark-300: #1e1e2e;
+  --color-dark-400: #2d2d3d;
+  --color-dark-500: #3d3d4d;
+
+  /* Transition defaults */
   --default-transition-duration: 150ms;
   --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Base styles and CSS variable fallbacks */
 :root {
+  /* Typography */
+  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  
+  /* Transitions */
   --tw-duration: 150ms;
   --tw-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Backdrop filters */
+  --tw-backdrop-blur: ;
+  --tw-backdrop-brightness: ;
+  --tw-backdrop-contrast: ;
+  --tw-backdrop-grayscale: ;
+  --tw-backdrop-hue-rotate: ;
+  --tw-backdrop-invert: ;
+  --tw-backdrop-opacity: ;
+  --tw-backdrop-saturate: ;
+  --tw-backdrop-sepia: ;
+  
+  /* Background */
+  --tw-bg-opacity: 1;
+  
+  /* Text */
+  --tw-text-opacity: 1;
+  
+  /* Shadow */
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+}
+
+/* Dark background for the app */
+body {
+  background-color: #0f172a;
+  color: #f1f5f9;
 }

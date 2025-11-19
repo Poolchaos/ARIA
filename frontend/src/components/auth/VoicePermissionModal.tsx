@@ -8,9 +8,9 @@ interface VoicePermissionModalProps {
 export function VoicePermissionModal({ onRequestPermission, onDismiss }: VoicePermissionModalProps) {
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <motion.div
-          className="bg-dark-300 rounded-2xl p-8 max-w-md mx-4 border-2 border-primary-500/30 shadow-xl"
+          className="bg-gray-900 rounded-2xl p-8 max-w-md mx-4 border-2 border-primary-500/40 shadow-xl shadow-primary-500/10"
           initial={{ opacity: 0, scale: 0.9, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -33,10 +33,10 @@ export function VoicePermissionModal({ onRequestPermission, onDismiss }: VoicePe
           </div>
 
           {/* Content */}
-          <h2 className="text-2xl font-bold text-gray-100 text-center mb-4">
+          <h2 className="text-2xl font-bold text-white text-center mb-4">
             Enable Voice Guidance
           </h2>
-          <p className="text-gray-400 text-center mb-6">
+          <p className="text-gray-300 text-center mb-6 leading-relaxed">
             ARIA uses voice synthesis to guide you through authentication. 
             Click "Enable Voice" to hear AI prompts for each step.
           </p>
@@ -45,20 +45,20 @@ export function VoicePermissionModal({ onRequestPermission, onDismiss }: VoicePe
           <div className="flex gap-3">
             <button
               onClick={onDismiss}
-              className="flex-1 px-4 py-3 rounded-lg bg-dark-400 hover:bg-dark-500 text-gray-300 transition-colors"
+              className="flex-1 px-4 py-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 transition-colors font-medium"
             >
               Skip Voice
             </button>
             <button
               onClick={onRequestPermission}
-              className="flex-1 px-4 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white font-medium transition-colors"
+              className="flex-1 px-4 py-3 rounded-lg bg-primary-500 hover:bg-primary-600 text-white font-semibold transition-colors shadow-lg shadow-primary-500/30"
             >
               Enable Voice
             </button>
           </div>
 
           {/* Info */}
-          <p className="text-xs text-gray-500 text-center mt-4">
+          <p className="text-xs text-gray-400 text-center mt-4">
             You can still use ARIA without voice guidance
           </p>
         </motion.div>
