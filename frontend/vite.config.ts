@@ -10,6 +10,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: ['@tsparticles/react', '@tsparticles/slim'],
+  },
   test: {
     globals: true,
     environment: 'happy-dom',

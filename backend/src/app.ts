@@ -1,13 +1,18 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.routes';
+import ttsRoutes from './routes/tts.routes';
 
 export const createApp = (): Express => {
   const app = express();
 
   // Middleware
   app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3004',
+    origin: [
+      process.env.FRONTEND_URL || 'http://localhost:3004',
+      'http://localhost:5173',
+      'http://localhost:3004'
+    ],
     credentials: true,
   }));
 
@@ -31,6 +36,7 @@ export const createApp = (): Express => {
 
   // API routes
   app.use('/auth', authRoutes);
+  app.use('/tts', ttsRoutes);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {

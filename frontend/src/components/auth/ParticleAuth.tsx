@@ -20,13 +20,14 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   const [showVoicePermissionModal, setShowVoicePermissionModal] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [replayVoice, setReplayVoice] = useState(0); // Trigger to replay voice prompt
+  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
 
   const {
     currentState,
     dispatch,
     formData,
     setFormField,
-    getParticleFormation,
     getParticleEmotion,
     getVoicePrompt,
     canGoBack,
@@ -218,13 +219,19 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   const voicePrompt = getVoicePrompt();
 
   const handleEnableVoice = () => {
+    console.log('[ParticleAuth] Enable voice clicked');
+    // Enable voice immediately
     setVoiceEnabled(true);
     setShowVoicePermissionModal(false);
     localStorage.setItem('aria_voice_modal_seen', 'true');
     localStorage.setItem('aria_voice_enabled', 'true');
-  };
 
-  const handleSkipVoice = () => {
+    // Trigger replay with a longer delay to ensure state has propagated
+    setTimeout(() => {
+      console.log('[ParticleAuth] Triggering voice replay, current state:', currentState, 'new count:', replayVoice + 1);
+      setReplayVoice(prev => prev + 1);
+    }, 500);
+  };  const handleSkipVoice = () => {
     setVoiceEnabled(false);
     setShowVoicePermissionModal(false);
     localStorage.setItem('aria_voice_modal_seen', 'true');
@@ -232,8 +239,9 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   };
 
   const handleVoicePermissionDenied = () => {
-    // Voice was denied, show a toast or message
-    setVoiceEnabled(false);
+    // Browser blocked voice - show permission modal to get user interaction
+    console.log('[ParticleAuth] Voice permission denied, showing modal');
+    setShowVoicePermissionModal(true);
   };
 
   return (
@@ -243,6 +251,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
         <ParticleWave
           isSpeaking={isSpeaking}
           emotion={getParticleEmotion()}
+          audioAnalyser={audioAnalyser}
         />
       </div>
 
@@ -258,13 +267,14 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
       <AnimatePresence mode="wait">
         {voiceEnabled && voicePrompt.text && (
           <VoicePrompt
-            key={currentState}
+            key={`${currentState}-${replayVoice}`}
             text={voicePrompt.text}
             emotion={voicePrompt.emotion}
             autoSpeak={voiceEnabled}
             voiceEnabled={voiceEnabled}
             onPermissionDenied={handleVoicePermissionDenied}
             onSpeakingChange={setIsSpeaking}
+            onAudioAnalyser={setAudioAnalyser}
           />
         )}
       </AnimatePresence>
@@ -293,7 +303,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
               onClick={() => dispatch({ type: 'NEXT' })}
               className="px-6 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white transition-colors"
             >
-              Let's go! →
+              Let's go!
             </button>
           )}
 

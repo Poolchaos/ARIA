@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import type { ParticleEmotion } from './AuthStateMachine';
-import AzureTTSService, { type Emotion } from '../../services/azureTTS';
+import AzureTTSService, { type Emotion as AzureEmotion } from '../../services/azureTTS';
+import GoogleTTSService, { type Emotion as GoogleEmotion } from '../../services/googleTTS';
 
 interface VoicePromptProps {
   text: string;
@@ -14,25 +15,44 @@ interface VoicePromptProps {
   onSpeakingChange?: (isSpeaking: boolean) => void;
 }
 
-// Singleton Azure TTS instance
+// Singleton instances
 let azureTTS: AzureTTSService | null = null;
+let googleTTS: GoogleTTSService | null = null;
 
 function getAzureTTS(): AzureTTSService {
   if (!azureTTS) {
     const subscriptionKey = import.meta.env.VITE_AZURE_SPEECH_KEY || '';
     const region = import.meta.env.VITE_AZURE_SPEECH_REGION || 'eastus';
-
-    if (!subscriptionKey) {
-      console.warn('Azure Speech key not configured, voice will be disabled');
-    }
-
     azureTTS = new AzureTTSService({ subscriptionKey, region });
   }
   return azureTTS;
 }
 
-// Map particle emotions to Azure emotions
-function mapEmotion(emotion: ParticleEmotion): Emotion {
+function getGoogleTTS(): GoogleTTSService {
+  if (!googleTTS) {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    googleTTS = new GoogleTTSService({ apiUrl });
+  }
+  return googleTTS;
+}
+
+// Map particle emotions to TTS emotions
+function mapEmotionForAzure(emotion: ParticleEmotion): AzureEmotion {
+  switch (emotion) {
+    case 'happy':
+    case 'success':
+      return 'happy';
+    case 'error':
+      return 'sad';
+    case 'listening':
+      return 'calm';
+    case 'idle':
+    default:
+      return 'neutral';
+  }
+}
+
+function mapEmotionForGoogle(emotion: ParticleEmotion): GoogleEmotion {
   switch (emotion) {
     case 'happy':
     case 'success':
@@ -58,8 +78,10 @@ export function VoicePrompt({
   onSpeakingChange
 }: VoicePromptProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const hasSpokenRef = useRef(false);
   const currentAudioRef = useRef<{ stop: () => void } | null>(null);
+  const isMountedRef = useRef(true);
+
+  console.log('[VoicePrompt] Component rendered/updated:', { text, autoSpeak, voiceEnabled });
 
   // Update parent when speaking state changes
   const updateSpeaking = (speaking: boolean) => {
@@ -68,22 +90,97 @@ export function VoicePrompt({
   };
 
   useEffect(() => {
-    if (!voiceEnabled || !autoSpeak || !text || hasSpokenRef.current) {
+    // Reset mounted flag
+    isMountedRef.current = true;
+    let isCleanedUp = false;
+
+    if (!voiceEnabled || !autoSpeak || !text) {
       return;
     }
 
-    hasSpokenRef.current = true;
-
-    // Check if Azure is configured
+    // Check which TTS service to use (priority: Google > Azure > Web Speech)
+    const hasGoogle = true; // Always available via backend
     const azureKey = import.meta.env.VITE_AZURE_SPEECH_KEY;
     const hasAzure = azureKey && azureKey !== 'your_azure_speech_key_here' && azureKey.length > 10;
 
-    if (hasAzure) {
-      // Use Azure TTS
+    if (hasGoogle) {
+      // Use Google TTS (best option - provides audio analyser)
+      console.log('[VoicePrompt] Using Google TTS, text:', text);
+      const tts = getGoogleTTS();
+      const speakAsync = async () => {
+        if (isCleanedUp) {
+          console.log('[VoicePrompt] Already cleaned up, aborting');
+          return;
+        }
+
+        try {
+          const googleEmotion = mapEmotionForGoogle(emotion);
+          const speechOptions = {
+            text,
+            emotion: googleEmotion,
+            rate: emotion === 'happy' ? 1.1 : emotion === 'error' ? 0.9 : 1.0,
+            pitch: emotion === 'happy' ? 10 : emotion === 'error' ? -10 : 0,
+          };
+
+          console.log('[VoicePrompt] Synthesizing with options:', speechOptions);
+          const audio = await tts.synthesize(speechOptions);
+          console.log('[VoicePrompt] Synthesis complete');
+          if (isCleanedUp) return;
+
+          currentAudioRef.current = audio;
+
+          await new Promise(resolve => setTimeout(resolve, 300));
+          if (isCleanedUp) {
+            console.log('[VoicePrompt] Cleaned up before play');
+            return;
+          }
+
+          console.log('[VoicePrompt] Setting speaking=true, calling audio.play()');
+          updateSpeaking(true);
+          const analyser = await audio.play();
+          console.log('[VoicePrompt] Audio playing, analyser:', analyser);
+          onAudioAnalyser?.(analyser);
+
+          const duration = audio.audio.duration * 1000;
+          console.log('[VoicePrompt] Waiting for audio completion, duration:', duration);
+          await new Promise(resolve => setTimeout(resolve, duration));
+
+          if (!isCleanedUp) {
+            console.log('[VoicePrompt] Audio complete, cleaning up');
+            updateSpeaking(false);
+            onAudioAnalyser?.(null);
+            currentAudioRef.current = null;
+            onComplete?.();
+          }
+
+        } catch (error) {
+          console.error('[VoicePrompt] Google TTS error:', error);
+
+          // Check if it's a permission/autoplay error
+          if (error instanceof Error &&
+              (error.name === 'NotAllowedError' ||
+               error.message.includes('play()') ||
+               error.message.includes('user didn\'t interact'))) {
+            console.log('[VoicePrompt] Permission denied, triggering modal');
+            onPermissionDenied?.();
+          }
+
+          if (!isCleanedUp) {
+            updateSpeaking(false);
+            onAudioAnalyser?.(null);
+            onComplete?.();
+          }
+        }
+      };
+      speakAsync();
+    } else if (hasAzure) {
+      // Use Azure TTS (fallback option)
       const tts = getAzureTTS();
       const speakAsync = async () => {
+        if (isCleanedUp) return;
+
         try {
-          const azureEmotion = mapEmotion(emotion);
+          const azureEmotion = mapEmotionForAzure(emotion);
           const speechOptions = {
             text,
             emotion: azureEmotion,
@@ -92,9 +189,12 @@ export function VoicePrompt({
           };
 
           const audio = await tts.synthesize(speechOptions);
+          if (isCleanedUp) return;
+
           currentAudioRef.current = audio;
 
           await new Promise(resolve => setTimeout(resolve, 300));
+          if (isCleanedUp) return;
 
           updateSpeaking(true);
           const analyser = await audio.play();
@@ -103,31 +203,41 @@ export function VoicePrompt({
           const duration = audio.audio.duration * 1000;
           await new Promise(resolve => setTimeout(resolve, duration));
 
-          updateSpeaking(false);
-          onAudioAnalyser?.(null);
-          currentAudioRef.current = null;
-          onComplete?.();
+          if (!isCleanedUp) {
+            updateSpeaking(false);
+            onAudioAnalyser?.(null);
+            currentAudioRef.current = null;
+            onComplete?.();
+          }
 
         } catch (error) {
           console.error('Azure TTS error:', error);
-          updateSpeaking(false);
-          onAudioAnalyser?.(null);
-          // Don't fallback - just complete
-          onComplete?.();
+          if (!isCleanedUp) {
+            updateSpeaking(false);
+            onAudioAnalyser?.(null);
+            // Don't fallback - just complete
+            onComplete?.();
+          }
         }
       };
       speakAsync();
     } else {
       // Use Web Speech API directly (no Azure)
       const timer = setTimeout(() => {
+        if (isCleanedUp) {
+          return;
+        }
         updateSpeaking(true);
         fallbackToWebSpeech(text, emotion, () => {
-          updateSpeaking(false);
-          onComplete?.();
-        });
+          if (!isCleanedUp) {
+            updateSpeaking(false);
+            onComplete?.();
+          }
+        }, onPermissionDenied);
       }, 300);
 
       return () => {
+        isCleanedUp = true;
         clearTimeout(timer);
         // Clean up on unmount - cancel any speech
         if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -136,6 +246,10 @@ export function VoicePrompt({
         updateSpeaking(false);
       };
     }    return () => {
+      // Mark as cleaned up to prevent async operations from continuing
+      isCleanedUp = true;
+      isMountedRef.current = false;
+
       // Clean up on unmount - cancel any speech
       if (currentAudioRef.current) {
         currentAudioRef.current.stop();
@@ -147,12 +261,7 @@ export function VoicePrompt({
       updateSpeaking(false);
       onAudioAnalyser?.(null);
     };
-  }, [text, emotion, autoSpeak, voiceEnabled, onComplete, onAudioAnalyser]);
-
-  // Reset spoken flag when text changes
-  useEffect(() => {
-    hasSpokenRef.current = false;
-  }, [text]);
+  }, [text, emotion, autoSpeak, voiceEnabled, onComplete, onAudioAnalyser, onSpeakingChange]);
 
   if (!text) return null;
 
@@ -211,13 +320,30 @@ export function VoicePrompt({
 }
 
 // Fallback to browser Web Speech API if Azure fails
-function fallbackToWebSpeech(text: string, emotion: ParticleEmotion, onComplete?: () => void) {
+function fallbackToWebSpeech(text: string, emotion: ParticleEmotion, onComplete?: () => void, onPermissionDenied?: () => void) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     onComplete?.();
     return;
   }
 
   const synth = window.speechSynthesis;
+
+  // Check voices availability immediately
+  const initialVoices = synth.getVoices();
+  if (initialVoices.length === 0) {
+    console.warn('No voices loaded yet - waiting for voiceschanged event');
+    // Wait for voices to load
+    const loadVoices = () => {
+      const voices = synth.getVoices();
+      if (voices.length > 0) {
+        synth.removeEventListener('voiceschanged', loadVoices);
+        // Retry the speech after voices are loaded
+        fallbackToWebSpeech(text, emotion, onComplete);
+      }
+    };
+    synth.addEventListener('voiceschanged', loadVoices);
+    return;
+  }
 
   // Cancel any previous speech first
   synth.cancel();
@@ -240,8 +366,29 @@ function fallbackToWebSpeech(text: string, emotion: ParticleEmotion, onComplete?
       utterance.pitch = 1.0;
   }
 
-  utterance.onend = () => onComplete?.();
-  utterance.onerror = () => onComplete?.();
+  utterance.onstart = () => {
+  };
+  utterance.onend = () => {
+    onComplete?.();
+  };
+  utterance.onerror = (event) => {
+    console.error('Speech error event:', event);
+    console.error('Error details:', { error: event.error, charIndex: event.charIndex });
+
+    // If permission denied, trigger the permission modal
+    if (event.error === 'not-allowed') {
+      onPermissionDenied?.();
+    }
+
+    onComplete?.();
+  };
 
   synth.speak(utterance);
+
+  // Check available voices
+  const voices = synth.getVoices();
+  if (voices.length > 0) {
+  } else {
+    console.warn('No voices available - this may be the issue!');
+  }
 }

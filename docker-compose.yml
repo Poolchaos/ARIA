@@ -18,7 +18,7 @@ services:
       - aria_network
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - frontend_node_modules:/app/node_modules
     command: npm run dev -- --host
 
   backend:
@@ -37,9 +37,10 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev-refresh-secret-key-change-in-production-67890}
       - NODE_ENV=development
       - PORT=5000
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/google-tts-credentials.json
     volumes:
       - ./backend:/app
-      - /app/node_modules
+      - backend_node_modules:/app/node_modules
     depends_on:
       mongodb:
         condition: service_healthy
@@ -116,6 +117,8 @@ services:
 volumes:
   redis_data:
   mongodb_data:
+  frontend_node_modules:
+  backend_node_modules:
 
 networks:
   aria_network:
