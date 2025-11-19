@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import { ParticleCanvas } from './ParticleCanvas';
 import { ParticleInput } from './ParticleInput';
 import { VoicePrompt } from './VoicePrompt';
+import { VoicePermissionModal } from './VoicePermissionModal';
 import { useAuthStateMachine } from './AuthStateMachine';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +18,8 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
   const [audioLevel] = useState(0);
+  const [showVoicePermissionModal, setShowVoicePermissionModal] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
 
   const {
     currentState,
@@ -34,6 +37,16 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   // Initialize mode
   useEffect(() => {
     dispatch({ type: mode === 'login' ? 'START_LOGIN' : 'START_REGISTER' });
+    
+    // Check if we should show voice permission modal
+    const hasSeenVoiceModal = localStorage.getItem('aria_voice_modal_seen');
+    if (!hasSeenVoiceModal && 'speechSynthesis' in window) {
+      // Small delay to let the page load
+      const timer = setTimeout(() => {
+        setShowVoicePermissionModal(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
   }, [mode, dispatch]);
 
   // Handle form submission
@@ -199,6 +212,23 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
   const voicePrompt = getVoicePrompt();
 
+  const handleEnableVoice = () => {
+    setVoiceEnabled(true);
+    setShowVoicePermissionModal(false);
+    localStorage.setItem('aria_voice_modal_seen', 'true');
+  };
+
+  const handleSkipVoice = () => {
+    setVoiceEnabled(false);
+    setShowVoicePermissionModal(false);
+    localStorage.setItem('aria_voice_modal_seen', 'true');
+  };
+
+  const handleVoicePermissionDenied = () => {
+    // Voice was denied, show a toast or message
+    setVoiceEnabled(false);
+  };
+
   return (
     <div className="relative w-full h-screen bg-dark-200 overflow-hidden">
       {/* Particle Canvas Background */}
@@ -210,13 +240,22 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
         />
       </div>
 
+      {/* Voice Permission Modal */}
+      {showVoicePermissionModal && (
+        <VoicePermissionModal
+          onRequestPermission={handleEnableVoice}
+          onDismiss={handleSkipVoice}
+        />
+      )}
+
       {/* Voice Prompt */}
       <AnimatePresence mode="wait">
-        {voicePrompt.text && (
+        {voiceEnabled && voicePrompt.text && (
           <VoicePrompt
             key={currentState}
             text={voicePrompt.text}
             emotion={voicePrompt.emotion}
+            onPermissionDenied={handleVoicePermissionDenied}
           />
         )}
       </AnimatePresence>

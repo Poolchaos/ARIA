@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { ParticleEmotion } from './AuthStateMachine';
 
 interface VoicePromptProps {
@@ -7,6 +7,7 @@ interface VoicePromptProps {
   emotion: ParticleEmotion;
   onComplete?: () => void;
   autoSpeak?: boolean;
+  onPermissionDenied?: () => void;
 }
 
 // Voice synthesis utility
@@ -14,6 +15,8 @@ class VoiceSynthesizer {
   private synth: SpeechSynthesis | null = null;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private voice: SpeechSynthesisVoice | null = null;
+  private permissionGranted: boolean = false;
+  private permissionRequested: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -56,7 +59,7 @@ class VoiceSynthesizer {
     }
   }
 
-  speak(text: string, emotion: ParticleEmotion, onComplete?: () => void) {
+  speak(text: string, emotion: ParticleEmotion, onComplete?: () => void, onError?: (error: string) => void) {
     if (!this.synth || !text) return;
 
     // Cancel any ongoing speech
@@ -102,6 +105,12 @@ class VoiceSynthesizer {
     utterance.onerror = (event) => {
       console.error('Speech synthesis error:', event);
       this.currentUtterance = null;
+      
+      if (event.error === 'not-allowed') {
+        this.permissionGranted = false;
+        onError?.('not-allowed');
+      }
+      
       onComplete?.();
     };
 
@@ -131,25 +140,30 @@ function getVoiceSynthesizer(): VoiceSynthesizer {
   return voiceSynthesizer;
 }
 
-export function VoicePrompt({ text, emotion, onComplete, autoSpeak = true }: VoicePromptProps) {
+export function VoicePrompt({ text, emotion, onComplete, autoSpeak = true, onPermissionDenied }: VoicePromptProps) {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [permissionError, setPermissionError] = useState(false);
   const hasSpokenRef = useRef(false);
 
   useEffect(() => {
     if (autoSpeak && text && !hasSpokenRef.current) {
       hasSpokenRef.current = true;
       const synth = getVoiceSynthesizer();
-
+      
       // Small delay for better UX
       const timer = setTimeout(() => {
         setIsSpeaking(true);
         synth.speak(text, emotion, () => {
           setIsSpeaking(false);
           onComplete?.();
+        }, (error) => {
+          if (error === 'not-allowed') {
+            setPermissionError(true);
+            onPermissionDenied?.();
+          }
+          setIsSpeaking(false);
         });
-      }, 300);
-
-      return () => {
+      }, 300);      return () => {
         clearTimeout(timer);
         synth.cancel();
         setIsSpeaking(false);
@@ -160,6 +174,7 @@ export function VoicePrompt({ text, emotion, onComplete, autoSpeak = true }: Voi
   // Reset spoken flag when text changes
   useEffect(() => {
     hasSpokenRef.current = false;
+    setPermissionError(false);
   }, [text]);
 
   if (!text) return null;
@@ -223,8 +238,8 @@ export function useVoiceSynthesis() {
   const synth = getVoiceSynthesizer();
 
   return {
-    speak: (text: string, emotion: ParticleEmotion = 'idle', onComplete?: () => void) => {
-      synth.speak(text, emotion, onComplete);
+    speak: (text: string, emotion: ParticleEmotion = 'idle', onComplete?: () => void, onError?: (error: string) => void) => {
+      synth.speak(text, emotion, onComplete, onError);
     },
     cancel: () => {
       synth.cancel();

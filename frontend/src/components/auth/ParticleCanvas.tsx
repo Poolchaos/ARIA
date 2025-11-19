@@ -268,7 +268,7 @@ export function ParticleCanvas({
         // Audio reactivity (breathing effect)
         const breathe = Math.sin(timeRef.current * 0.05) * 2;
         const audioReact = audioLevel * 5;
-        const finalRadius = p.radius + breathe + audioReact;
+        const finalRadius = Math.max(0.5, p.radius + breathe + audioReact);
 
         // Draw particle
         ctx.beginPath();
