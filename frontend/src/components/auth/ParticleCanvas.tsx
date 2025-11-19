@@ -36,36 +36,27 @@ export function ParticleCanvas({
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   // Formation calculation helper functions
-  const calculateFaceFormation = useCallback((particles: Particle[], cx: number, cy: number) => {
-    const faceRadius = 100;
-    const eyeRadius = 20;
-    const mouthRadius = 60;
+  const calculateWaveFormation = useCallback((particles: Particle[], cx: number, cy: number) => {
+    const barCount = 12;
+    const barWidth = 25;
+    const totalWidth = barCount * barWidth;
+    const maxHeight = 120;
 
     particles.forEach((p, i) => {
-      const ratio = i / particles.length;
-
-      if (ratio < 0.4) {
-        // Face outline (circle)
-        const angle = ratio * Math.PI * 2 * 2.5;
-        p.targetX = cx + Math.cos(angle) * faceRadius;
-        p.targetY = cy + Math.sin(angle) * faceRadius;
-      } else if (ratio < 0.55) {
-        // Left eye
-        const angle = (ratio - 0.4) * Math.PI * 2 * 6;
-        p.targetX = cx - 40 + Math.cos(angle) * eyeRadius;
-        p.targetY = cy - 30 + Math.sin(angle) * eyeRadius;
-      } else if (ratio < 0.7) {
-        // Right eye
-        const angle = (ratio - 0.55) * Math.PI * 2 * 6;
-        p.targetX = cx + 40 + Math.cos(angle) * eyeRadius;
-        p.targetY = cy - 30 + Math.sin(angle) * eyeRadius;
-      } else {
-        // Smile (arc)
-        const smileEmotion = emotion === 'happy' || emotion === 'success' ? 1.2 : 0.8;
-        const angle = Math.PI * 0.2 + (ratio - 0.7) * Math.PI * 0.6;
-        p.targetX = cx + Math.cos(angle) * mouthRadius;
-        p.targetY = cy + 20 + Math.sin(angle) * mouthRadius * smileEmotion;
-      }
+      const barIndex = Math.floor((i / particles.length) * barCount);
+      const particlesPerBar = particles.length / barCount;
+      const positionInBar = (i % particlesPerBar) / particlesPerBar;
+      
+      // Staggered wave effect - each bar has different height
+      const waveOffset = Math.sin(barIndex * 0.8 + timeRef.current * 0.03) * 0.5 + 0.5;
+      const barHeight = maxHeight * (0.3 + waveOffset * 0.7);
+      
+      // X position: centered bars with gaps
+      p.targetX = cx - totalWidth / 2 + barIndex * barWidth + (barWidth / 2);
+      
+      // Y position: stack particles vertically in each bar
+      const particleY = cy + (maxHeight / 2) - (positionInBar * barHeight);
+      p.targetY = particleY;
     });
   }, [emotion]);
 
@@ -151,7 +142,7 @@ export function ParticleCanvas({
 
     switch (type) {
       case 'face':
-        calculateFaceFormation(particles, centerX, centerY);
+        calculateWaveFormation(particles, centerX, centerY);
         break;
       case 'field':
         calculateFieldFormation(particles, centerX, centerY);
@@ -166,7 +157,7 @@ export function ParticleCanvas({
         calculateLoadingFormation(particles, centerX, centerY);
         break;
     }
-  }, [dimensions.width, dimensions.height, calculateFaceFormation, calculateFieldFormation, calculateButtonFormation, calculateScatteredFormation, calculateLoadingFormation]);
+  }, [dimensions.width, dimensions.height, calculateWaveFormation, calculateFieldFormation, calculateButtonFormation, calculateScatteredFormation, calculateLoadingFormation]);
 
   // Initialize particles
   useEffect(() => {
