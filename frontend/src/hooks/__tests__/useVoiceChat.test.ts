@@ -113,7 +113,7 @@ describe('useVoiceChat', () => {
 
     // Simulate AI playing audio
     const audioBlob = new Blob(['mock audio data'], { type: 'audio/mp3' });
-    
+
     act(() => {
       result.current.connect();
     });
