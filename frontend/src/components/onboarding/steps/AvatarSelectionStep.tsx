@@ -31,7 +31,7 @@ interface AvatarSelectionStepProps {
 
 export function AvatarSelectionStep({ onNext, onBack }: AvatarSelectionStepProps) {
   const { user, updateUser } = useAuthStore();
-  
+
   // Initialize from user preferences or localStorage
   const [selectedAvatar, setSelectedAvatar] = useState<Avatar>(() => {
     // Try user's saved preference first
@@ -39,7 +39,7 @@ export function AvatarSelectionStep({ onNext, onBack }: AvatarSelectionStepProps
       const savedAvatar = AVAILABLE_AVATARS.find(a => a.id === user.selectedAvatar);
       if (savedAvatar) return savedAvatar;
     }
-    
+
     // Try localStorage
     try {
       const saved = localStorage.getItem('selectedAvatar');
@@ -51,11 +51,11 @@ export function AvatarSelectionStep({ onNext, onBack }: AvatarSelectionStepProps
     } catch {
       // Ignore parse errors
     }
-    
+
     // Default to first avatar
     return AVAILABLE_AVATARS[0];
   });
-  
+
   const [isSaving, setIsSaving] = useState(false);
 
   const handleContinue = async () => {

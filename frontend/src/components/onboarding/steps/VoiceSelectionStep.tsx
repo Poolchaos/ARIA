@@ -30,7 +30,7 @@ interface VoiceSelectionStepProps {
 
 export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSelectionStepProps) {
   const { user, updateUser } = useAuthStore();
-  
+
   // Initialize from user preferences or localStorage
   const [selectedVoice, setSelectedVoice] = useState<Voice>(() => {
     // Try user's saved preference first
@@ -38,7 +38,7 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
       const savedVoice = AVAILABLE_VOICES.find(v => v.name === user.voiceName);
       if (savedVoice) return savedVoice;
     }
-    
+
     // Try localStorage
     try {
       const saved = localStorage.getItem('selectedVoice');
@@ -50,11 +50,11 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
     } catch {
       // Ignore parse errors
     }
-    
+
     // Default to first voice
     return AVAILABLE_VOICES[0];
   });
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [gender, setGender] = useState<'all' | 'male' | 'female'>('all');
   const [volume, setVolume] = useState(() => {
@@ -62,7 +62,7 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
     if (user?.voiceVolume !== undefined) {
       return user.voiceVolume;
     }
-    
+
     // Try localStorage
     try {
       const saved = localStorage.getItem('voiceVolume');
@@ -70,7 +70,7 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
     } catch {
       // Ignore parse errors
     }
-    
+
     return 1.0;
   });
   const [isSaving, setIsSaving] = useState(false);

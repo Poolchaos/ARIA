@@ -115,6 +115,7 @@ export interface UpdatePreferencesRequest {
   selectedPersonality?: string;
   onboardingCompleted?: boolean;
   phoneticName?: string;
+  profanityFilterEnabled?: boolean;
 }
 
 export interface UserResponse {
@@ -135,6 +136,7 @@ export interface UserResponse {
       selectedAvatarColor?: string;
       selectedPersonality?: string;
       onboardingCompleted?: boolean;
+      profanityFilterEnabled?: boolean;
     };
   };
 }

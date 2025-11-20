@@ -18,7 +18,7 @@ const getWelcomeMessage = (name: string): string => {
     `Welcome, ${name}! I'm ARIA, your personal household assistant. I'm excited to help you organize your life and make everyday tasks effortless. Shall we begin?`,
     `${name}, welcome aboard! I'm ARIA, here to make managing your home a breeze. From calendars to shopping lists, I've got you covered. Let's get started!`,
   ];
-  
+
   // Pick a random message
   return messages[Math.floor(Math.random() * messages.length)];
 };
@@ -33,7 +33,7 @@ export function WelcomeStep({ userName, userPhoneticName, onNext, onVoiceStateCh
     // Use phonetic name for speech, but display name for text
     const spokenName = userPhoneticName || userName;
     console.log('[WelcomeStep] userName:', userName, 'userPhoneticName:', userPhoneticName, 'spokenName:', spokenName);
-    
+
     const welcomeMessage = getWelcomeMessage(spokenName);
 
     playVoice({

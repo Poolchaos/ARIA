@@ -4,10 +4,18 @@ import { authApi } from '@/lib/api';
 import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
 import { useState, useEffect, useRef } from 'react';
 import { ParticleWave } from '@/components/auth/ParticleWave';
-import { LogOut, Calendar, ShoppingCart, Wallet, Package, Mic, Info, X, Edit2 } from 'lucide-react';
+import { LogOut, Calendar, ShoppingCart, Wallet, Package, Mic, Info, X, Edit2, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { playVoice } from '@/services/audioService';
 import { AudioWaveVisualization } from '@/components/dashboard/AudioWaveVisualization';
+import { SettingsModal } from '@/components/settings/SettingsModal';
+import {
+  containsProfanity,
+  updateProfanityState,
+  getProfanityResponse,
+  getApologyResponse,
+  resetProfanityState,
+} from '@/utils/profanityFilter';
 
 const WAKE_WORD_RESPONSES = [
   "How can I help you?",
@@ -28,7 +36,7 @@ const getPersonalizedGreeting = (name: string): string => {
     `${name}! Great to have you here. What would you like to do?`,
     `Hey ${name}, I'm ready to help. What's on your agenda?`,
   ];
-  
+
   // Add time-based greetings
   if (timeOfDay < 12) {
     greetings.push(`Good morning, ${name}! Ready to tackle the day?`);
@@ -37,7 +45,7 @@ const getPersonalizedGreeting = (name: string): string => {
   } else {
     greetings.push(`Good evening, ${name}! What can I help you with?`);
   }
-  
+
   return greetings[Math.floor(Math.random() * greetings.length)];
 };
 
@@ -49,6 +57,7 @@ export function HomePage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lastCommand, setLastCommand] = useState<string | null>(null);
   const [showPhoneticModal, setShowPhoneticModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [phoneticNameInput, setPhoneticNameInput] = useState('');
   const userRef = useRef(user);
 
@@ -87,11 +96,30 @@ export function HomePage() {
 
       console.log('Voice input:', transcript);
 
+      const currentUser = userRef.current;
+
+      // Check for profanity if filter is enabled
+      if (currentUser?.profanityFilterEnabled !== false) {
+        if (containsProfanity(transcript)) {
+          // Check for apology
+          if (transcript.includes('sorry') || transcript.includes('apologize') || transcript.includes('my bad')) {
+            resetProfanityState();
+            speak(getApologyResponse());
+            return;
+          }
+
+          // Update emotional state
+          const state = updateProfanityState();
+          const response = getProfanityResponse(state);
+          speak(response);
+          return;
+        }
+      }
+
       // Wake word detection
       if (transcript.includes('aria') || transcript.includes('hey aria')) {
-        const currentUser = userRef.current;
         const nameToUse = currentUser?.phoneticName || currentUser?.name?.split(' ')[0];
-        
+
         let response: string;
         if (nameToUse) {
           // Use personalized greeting most of the time (70% chance)
@@ -194,6 +222,7 @@ export function HomePage() {
   return (
     <>
       {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
+      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Voice Commands Modal */}
       <AnimatePresence>
@@ -322,6 +351,14 @@ export function HomePage() {
               <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-primary-500 animate-ping' : 'bg-green-500 animate-pulse'}`} />
               <span className="text-xs text-gray-300">{isSpeaking ? 'Processing...' : 'Listening'}</span>
             </div>
+
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors group cursor-pointer z-50"
+              title="Settings"
+            >
+              <Settings className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
+            </button>
 
             <button
               onClick={handleLogout}

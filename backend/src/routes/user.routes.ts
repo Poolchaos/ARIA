@@ -17,6 +17,7 @@ const updatePreferencesSchema = z.object({
   selectedPersonality: z.string().optional(),
   onboardingCompleted: z.boolean().optional(),
   phoneticName: z.string().optional(),
+  profanityFilterEnabled: z.boolean().optional(),
 });
 
 /**
@@ -55,6 +56,7 @@ router.patch('/preferences', authenticateToken, async (req, res) => {
         selectedAvatarColor: true,
         selectedPersonality: true,
         onboardingCompleted: true,
+        profanityFilterEnabled: true,
       },
     });
 
@@ -69,7 +71,7 @@ router.patch('/preferences', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('[user.routes] Error updating preferences:', error);
-    
+
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         error: 'Validation failed',
@@ -111,6 +113,7 @@ router.get('/me', authenticateToken, async (req, res) => {
         selectedAvatarColor: true,
         selectedPersonality: true,
         onboardingCompleted: true,
+        profanityFilterEnabled: true,
       },
     });
 

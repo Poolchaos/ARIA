@@ -46,6 +46,9 @@ model User {
   // LLM preferences
   llmProvider String @default("claude") // "claude" | "gemini" | "openai"
 
+  // Content filtering preferences
+  profanityFilterEnabled Boolean @default(true) // Filter profanity by default
+
   // Onboarding preferences
   onboardingCompleted Boolean @default(false)
   selectedAvatar      String? // "particle" | "wave" | "orb" | "abstract"

@@ -17,6 +17,7 @@ interface User {
   selectedAvatarColor?: string;
   selectedPersonality?: string;
   phoneticName?: string;
+  profanityFilterEnabled?: boolean;
 }
 
 interface AuthState {
