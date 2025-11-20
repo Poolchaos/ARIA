@@ -11,15 +11,25 @@ ARIA is a self-hosted voice assistant designed for small households (2-5 members
 
 ## Features
 
-- **Voice-First Interaction:** Talk to ARIA naturally, get spoken responses with natural neural voices
-- **Audio-Reactive Particles:** Dynamic soundwave visualization synced to ARIA's voice in real-time
+### Voice Interaction
+- **Natural Conversation:** Wake-word activation ("Hi ARIA"), voice command confirmation flow
+- **Neural Voice Synthesis:** Azure/Google TTS with natural neural voices (optional, free tier available)
+- **Audio-Reactive Visualization:** Real-time soundwave particles synced to ARIA's speech
+- **Smart Echo Prevention:** Filters self-hearing to prevent infinite loops
+- **Voice Activity Detection:** Interrupts supported, continuous listening mode
+
+### User Experience
+- **Particle-Based Auth:** Beautiful animated login/register with voice guidance
+- **Confirmation Flow:** Voice or click to confirm/retry/cancel commands
 - **Multi-User Support:** Separate personal data, shared household resources
-- **Privacy-First:** Self-hosted on your server, zero telemetry, you own your data
-- **Azure TTS Integration:** Natural human-like voice (optional, free tier) or Web Speech API fallback
-- **Multi-LLM Support:** Choose Claude, Gemini, OpenAI, or local models (Ollama)
-- **Household Coordination:** Shared calendars, shopping lists, budget tracking
-- **Personal Productivity:** Tasks, notes, break reminders, focus sessions
-- **Beautiful UI:** Mobile-first web app, animated particle system, light/dark themes
+- **Mobile-First UI:** Responsive design with light/dark themes
+- **Privacy-First:** Self-hosted, zero telemetry, you own your data
+
+### Integrations
+- **Multi-LLM Support:** Claude, Gemini, OpenAI, or local models (Ollama)
+- **TTS Options:** Azure TTS (natural), Google TTS (natural), or Web Speech API (fallback)
+- **Intent Recognition:** LLM-powered command understanding and routing
+- **Action Handlers:** Weather, navigation, settings, calendar, shopping lists (expandable)
 
 ## Tech Stack
 
@@ -135,12 +145,24 @@ Azure Cognitive Services Text-to-Speech provides natural, human-like voice for A
 - ✅ Smooth state machine with conversational prompts
 - ✅ Emotion-based speech modulation (happy, calm, empathetic)
 
-**Phase 1: Enhanced Voice Interface** 🚧 **IN PROGRESS**
+**Phase 1: Voice Command System** ✅ **COMPLETED**
+- ✅ Wake-word detection ("Hi ARIA" / "Hey ARIA")
+- ✅ Voice command confirmation flow (say/click yes/no/cancel)
+- ✅ LLM-powered intent recognition and routing
+- ✅ Action handlers (weather, navigation, settings, general)
+- ✅ Echo prevention (ARIA doesn't hear herself)
+- ✅ Timeout management (15-second confirmation window)
+- ✅ State machine with proper cleanup and reset
+- ✅ Comprehensive logging for debugging
+
+**Phase 2: Enhanced Capabilities** 🚧 **IN PROGRESS**
 - 🚧 Voice Activity Detection (VAD) for interrupts
 - 🚧 Conversation transcript storage (30-day retention)
 - 🚧 Dynamic AI tone variations
 - 🚧 User preference learning system
-- 🚧 Proactive engagement with news
+- 🚧 Calendar integration (shared household events)
+- 🚧 Shopping list management
+- 🚧 Task tracking and reminders
 
 See [Project Plan](docs/plans/project-plan.md) for detailed roadmap.
 
