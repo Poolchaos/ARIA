@@ -119,13 +119,6 @@ Azure Cognitive Services Text-to-Speech provides natural, human-like voice for A
 - Audio-reactive particle visualization synced to voice
 - SSML control for rate, pitch, volume
 
-## Documentation
-
-- [Business Requirements](docs/plans/business-requirements.md)
-- [Technical Architecture](docs/plans/technical-architecture.md)
-- [Phase 0 Implementation Guide](docs/plans/phase-0-checklist.md)
-- [Project Rules](docs/_rules/project_rules.md)
-
 ## Development Status
 
 **Phase 0: Foundations** ✅ **COMPLETED**
