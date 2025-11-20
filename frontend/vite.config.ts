@@ -13,4 +13,11 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@tsparticles/react', '@tsparticles/slim'],
   },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: './src/test/setup.ts',
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**'],
+  },
 })

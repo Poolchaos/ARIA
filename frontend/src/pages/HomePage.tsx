@@ -72,7 +72,7 @@ export function HomePage() {
   const isSpeakingRef = useRef(false); // Track if ARIA is currently speaking
   const isProcessingRef = useRef(false); // Track if we're processing a command
   const pendingCommandRef = useRef<{ transcript: string; intent: any } | null>(null); // Track pending command
-  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null); // Track confirmation timeout
+  const timeoutIdRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Track confirmation timeout
 
   // Get services
   const intentService = getIntentService();

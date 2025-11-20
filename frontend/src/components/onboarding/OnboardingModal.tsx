@@ -26,7 +26,6 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
   const [direction, setDirection] = useState(1);
   const [isVoicePlaying, setIsVoicePlaying] = useState(false);
-  const [audioLevel, setAudioLevel] = useState(0);
   const { user } = useAuthStore();
 
   useEffect(() => {
@@ -69,19 +68,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     }),
   };
 
-  // Simulate audio level for visualization
-  useEffect(() => {
-    if (!isVoicePlaying) {
-      const timer = setTimeout(() => setAudioLevel(0), 0);
-      return () => clearTimeout(timer);
-    }
 
-    const interval = setInterval(() => {
-      setAudioLevel(Math.random() * 0.5 + 0.5);
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, [isVoicePlaying]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -99,7 +86,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
         {/* Progress bar */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-gray-800">
           <motion.div
-            className="h-full bg-gradient-to-r from-primary-500 to-primary-600"
+            className="h-full bg-linear-to-r from-primary-500 to-primary-600"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.5 }}

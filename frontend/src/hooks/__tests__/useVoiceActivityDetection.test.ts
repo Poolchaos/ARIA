@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useVoiceActivityDetection } from '../useVoiceActivityDetection';
 
 // Mock VAD
@@ -12,6 +12,7 @@ const mockVAD = {
 vi.mock('@ricky0123/vad-web', () => ({
   MicVAD: {
     new: vi.fn(async (options) => {
+      console.log('MicVAD.new called');
       // Store callbacks for testing
       (mockVAD as any).onSpeechStart = options.onSpeechStart;
       (mockVAD as any).onSpeechEnd = options.onSpeechEnd;
@@ -52,7 +53,9 @@ describe('useVoiceActivityDetection', () => {
       })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     expect(mockVAD.start).toHaveBeenCalled();
     expect(result.current.isListening).toBe(true);
@@ -68,7 +71,9 @@ describe('useVoiceActivityDetection', () => {
       })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     // Trigger speech start
     act(() => {
@@ -88,7 +93,9 @@ describe('useVoiceActivityDetection', () => {
       })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     // Trigger speech end
     act(() => {
@@ -100,17 +107,24 @@ describe('useVoiceActivityDetection', () => {
 
   it('should stop VAD when disabled', async () => {
     const { result, rerender } = renderHook(
-      ({ enabled }) => useVoiceActivityDetection({ enabled }),
-      { initialProps: { enabled: true } }
+      (props) => useVoiceActivityDetection(props),
+      {
+        initialProps: { enabled: true },
+      }
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     expect(result.current.isListening).toBe(true);
 
     // Disable
     rerender({ enabled: false });
-    await vi.runAllTimersAsync();
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     expect(mockVAD.destroy).toHaveBeenCalled();
     expect(result.current.isListening).toBe(false);
@@ -121,7 +135,9 @@ describe('useVoiceActivityDetection', () => {
       useVoiceActivityDetection({ enabled: true })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     act(() => {
       result.current.pause();
@@ -143,7 +159,9 @@ describe('useVoiceActivityDetection', () => {
       useVoiceActivityDetection({ enabled: true })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     unmount();
 
