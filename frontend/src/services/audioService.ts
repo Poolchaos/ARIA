@@ -15,6 +15,51 @@ interface PlayOptions {
 }
 
 /**
+ * Get the user's preferred voice from auth store or localStorage
+ */
+function getUserVoice(overrideVoiceName?: string): { name: string; volume: number } {
+  // If explicit voice name provided, use it
+  if (overrideVoiceName) {
+    return { name: overrideVoiceName, volume: 1.0 };
+  }
+
+  // Try to get from auth store (persisted user preferences)
+  const authStorage = localStorage.getItem('auth-storage');
+  if (authStorage) {
+    try {
+      const parsed = JSON.parse(authStorage);
+      if (parsed.state?.user?.voiceName) {
+        return {
+          name: parsed.state.user.voiceName,
+          volume: parsed.state.user.voiceVolume || 1.0,
+        };
+      }
+    } catch (e) {
+      console.warn('[AudioService] Failed to parse auth storage:', e);
+    }
+  }
+
+  // Fallback to localStorage (temporary storage during onboarding)
+  const storedVoice = localStorage.getItem('selectedVoice');
+  const storedVolume = localStorage.getItem('voiceVolume');
+
+  if (storedVoice) {
+    try {
+      const voice = JSON.parse(storedVoice);
+      return {
+        name: voice.name || voice,
+        volume: storedVolume ? parseFloat(storedVolume) : 1.0,
+      };
+    } catch (e) {
+      console.warn('[AudioService] Failed to parse selectedVoice:', e);
+    }
+  }
+
+  // Ultimate fallback
+  return { name: 'en-US-Neural2-D', volume: 1.0 };
+}
+
+/**
  * Register a callback to show the voice permission modal
  * This should be called once from the root App component
  */
@@ -50,15 +95,10 @@ export async function playVoice(options: PlayOptions): Promise<boolean> {
 
     onStateChange?.(true);
 
-    // Get voice from localStorage or use provided voiceName
-    const storedVoice = localStorage.getItem('selectedVoice');
-    const voice = voiceName
-      ? { name: voiceName }
-      : storedVoice
-        ? JSON.parse(storedVoice)
-        : { name: 'en-US-Neural2-D' };
+    // Get voice preference (user's saved voice > provided voiceName > default)
+    const userVoice = getUserVoice(voiceName);
 
-    console.log('[AudioService] Playing voice with:', { text, voice: voice.name });
+    console.log('[AudioService] Playing voice with:', { text, voice: userVoice.name, volume: userVoice.volume });
 
     // Call TTS API
     const response = await fetch('http://localhost:5001/tts/synthesize', {
@@ -66,8 +106,8 @@ export async function playVoice(options: PlayOptions): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text,
-        voice: voice.name,
-        languageCode: voice.name.split('-').slice(0, 2).join('-'),
+        voice: userVoice.name,
+        languageCode: userVoice.name.split('-').slice(0, 2).join('-'),
       }),
     });
 
@@ -86,6 +126,7 @@ export async function playVoice(options: PlayOptions): Promise<boolean> {
     const audioUrl = URL.createObjectURL(audioBlob);
 
     const audio = new Audio(audioUrl);
+    audio.volume = userVoice.volume; // Apply user's volume preference
     currentAudio = audio;
 
     audio.onended = () => {

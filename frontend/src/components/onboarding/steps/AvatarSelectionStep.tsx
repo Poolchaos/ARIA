@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check } from 'lucide-react';
+import { userApi } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 
 interface Avatar {
   id: string;
@@ -28,11 +30,62 @@ interface AvatarSelectionStepProps {
 }
 
 export function AvatarSelectionStep({ onNext, onBack }: AvatarSelectionStepProps) {
-  const [selectedAvatar, setSelectedAvatar] = useState<Avatar>(AVAILABLE_AVATARS[0]);
+  const { user, updateUser } = useAuthStore();
+  
+  // Initialize from user preferences or localStorage
+  const [selectedAvatar, setSelectedAvatar] = useState<Avatar>(() => {
+    // Try user's saved preference first
+    if (user?.selectedAvatar) {
+      const savedAvatar = AVAILABLE_AVATARS.find(a => a.id === user.selectedAvatar);
+      if (savedAvatar) return savedAvatar;
+    }
+    
+    // Try localStorage
+    try {
+      const saved = localStorage.getItem('selectedAvatar');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const avatar = AVAILABLE_AVATARS.find(a => a.id === parsed.id);
+        if (avatar) return avatar;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    
+    // Default to first avatar
+    return AVAILABLE_AVATARS[0];
+  });
+  
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleContinue = () => {
-    localStorage.setItem('selectedAvatar', JSON.stringify(selectedAvatar));
-    onNext();
+  const handleContinue = async () => {
+    try {
+      setIsSaving(true);
+
+      // Save to backend
+      await userApi.updatePreferences({
+        selectedAvatar: selectedAvatar.id,
+        selectedAvatarColor: selectedAvatar.primaryColor,
+      });
+
+      // Update local auth store
+      updateUser({
+        selectedAvatar: selectedAvatar.id,
+        selectedAvatarColor: selectedAvatar.primaryColor,
+      });
+
+      // Also save to localStorage for immediate access
+      localStorage.setItem('selectedAvatar', JSON.stringify(selectedAvatar));
+
+      onNext();
+    } catch (error) {
+      console.error('Failed to save avatar preferences:', error);
+      // Still proceed to next step even if save fails
+      localStorage.setItem('selectedAvatar', JSON.stringify(selectedAvatar));
+      onNext();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -182,15 +235,17 @@ export function AvatarSelectionStep({ onNext, onBack }: AvatarSelectionStepProps
       <div className="flex justify-between pt-6 border-t border-gray-700">
         <button
           onClick={onBack}
-          className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all"
+          disabled={isSaving}
+          className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Back
         </button>
         <button
           onClick={handleContinue}
-          className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-all"
+          disabled={isSaving}
+          className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continue
+          {isSaving ? 'Saving...' : 'Continue'}
         </button>
       </div>
     </div>

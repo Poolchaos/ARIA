@@ -6,6 +6,8 @@ import { useState, useEffect, useRef } from 'react';
 import { ParticleWave } from '@/components/auth/ParticleWave';
 import { LogOut, Calendar, ShoppingCart, Wallet, Package, Mic, Info, X, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { playVoice } from '@/services/audioService';
+import { AudioWaveVisualization } from '@/components/dashboard/AudioWaveVisualization';
 
 const WAKE_WORD_RESPONSES = [
   "How can I help you?",
@@ -17,6 +19,28 @@ const WAKE_WORD_RESPONSES = [
   "What's on your mind?",
 ];
 
+// Personalized greeting variations for returning users
+const getPersonalizedGreeting = (name: string): string => {
+  const timeOfDay = new Date().getHours();
+  const greetings = [
+    `Hi ${name}, nice to see you again! How can I help?`,
+    `Welcome back, ${name}! What can I assist you with today?`,
+    `${name}! Great to have you here. What would you like to do?`,
+    `Hey ${name}, I'm ready to help. What's on your agenda?`,
+  ];
+  
+  // Add time-based greetings
+  if (timeOfDay < 12) {
+    greetings.push(`Good morning, ${name}! Ready to tackle the day?`);
+  } else if (timeOfDay < 18) {
+    greetings.push(`Good afternoon, ${name}! How can I assist you?`);
+  } else {
+    greetings.push(`Good evening, ${name}! What can I help you with?`);
+  }
+  
+  return greetings[Math.floor(Math.random() * greetings.length)];
+};
+
 export function HomePage() {
   const navigate = useNavigate();
   const { user, refreshToken, logout, updateUser } = useAuthStore();
@@ -26,7 +50,6 @@ export function HomePage() {
   const [lastCommand, setLastCommand] = useState<string | null>(null);
   const [showPhoneticModal, setShowPhoneticModal] = useState(false);
   const [phoneticNameInput, setPhoneticNameInput] = useState('');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const userRef = useRef(user);
 
   useEffect(() => {
@@ -41,49 +64,10 @@ export function HomePage() {
   }, [user]);
 
   const speak = async (text: string) => {
-    try {
-      const storedVoice = localStorage.getItem('selectedVoice');
-      const voice = storedVoice ? JSON.parse(storedVoice) : { name: 'en-US-Neural2-D' };
-
-      setIsSpeaking(true);
-
-      const response = await fetch('http://localhost:5001/tts/synthesize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          voice: voice.name,
-          languageCode: voice.name.split('-').slice(0, 2).join('-'),
-        }),
-      });
-
-      if (!response.ok) throw new Error('TTS failed');
-
-      const data = await response.json();
-      if (!data.audioContent) return;
-
-      const audioData = Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0));
-      const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
-      const audioUrl = URL.createObjectURL(audioBlob);
-
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        setIsSpeaking(false);
-        audioRef.current = null;
-      };
-
-      await audio.play();
-    } catch (error) {
-      console.error('Speech error:', error);
-      setIsSpeaking(false);
-    }
+    await playVoice({
+      text,
+      onStateChange: setIsSpeaking,
+    });
   };
 
   // Voice command detection
@@ -105,17 +89,29 @@ export function HomePage() {
 
       // Wake word detection
       if (transcript.includes('aria') || transcript.includes('hey aria')) {
-        const responses = [...WAKE_WORD_RESPONSES];
-        // Add personalized responses if name is available
         const currentUser = userRef.current;
         const nameToUse = currentUser?.phoneticName || currentUser?.name?.split(' ')[0];
+        
+        let response: string;
         if (nameToUse) {
-          responses.push(`Yes, ${nameToUse}?`);
-          responses.push(`I'm here, ${nameToUse}.`);
-          responses.push(`Hello, ${nameToUse}.`);
+          // Use personalized greeting most of the time (70% chance)
+          if (Math.random() < 0.7) {
+            response = getPersonalizedGreeting(nameToUse);
+          } else {
+            // Occasionally use simple responses (30% chance)
+            const simpleResponses = [
+              ...WAKE_WORD_RESPONSES,
+              `Yes, ${nameToUse}?`,
+              `I'm here, ${nameToUse}.`,
+              `Hello, ${nameToUse}.`,
+            ];
+            response = simpleResponses[Math.floor(Math.random() * simpleResponses.length)];
+          }
+        } else {
+          // No name available, use generic responses
+          response = WAKE_WORD_RESPONSES[Math.floor(Math.random() * WAKE_WORD_RESPONSES.length)];
         }
 
-        const response = responses[Math.floor(Math.random() * responses.length)];
         speak(response);
       }
 
@@ -365,7 +361,15 @@ export function HomePage() {
           </div>
 
           {/* Middle: Spacer for Soundwave */}
-          <div className="grow flex items-center justify-center">
+          <div className="grow flex flex-col items-center justify-center gap-8">
+             {/* Audio Wave Visualization */}
+             <AudioWaveVisualization
+               isSpeaking={isSpeaking}
+               primaryColor={user?.selectedAvatarColor || '#0ea5e9'}
+               secondaryColor={user?.selectedAvatarColor ? `${user.selectedAvatarColor}cc` : '#3b82f6'}
+               size="large"
+             />
+
              {/* Optional: Visual cue for last command */}
              <AnimatePresence>
                {lastCommand && (

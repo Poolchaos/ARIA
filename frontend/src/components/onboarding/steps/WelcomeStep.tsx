@@ -10,6 +10,19 @@ interface WelcomeStepProps {
   onVoiceStateChange: (isPlaying: boolean) => void;
 }
 
+// Personalized welcome message variations
+const getWelcomeMessage = (name: string): string => {
+  const messages = [
+    `Hello ${name}! Welcome to ARIA, your intelligent household assistant. I'm here to help you manage your daily tasks, calendar, shopping, and more. Let's get you set up!`,
+    `Hi ${name}, it's wonderful to meet you! I'm ARIA, and I'll be helping you keep your household running smoothly. Let's personalize your experience together!`,
+    `Welcome, ${name}! I'm ARIA, your personal household assistant. I'm excited to help you organize your life and make everyday tasks effortless. Shall we begin?`,
+    `${name}, welcome aboard! I'm ARIA, here to make managing your home a breeze. From calendars to shopping lists, I've got you covered. Let's get started!`,
+  ];
+  
+  // Pick a random message
+  return messages[Math.floor(Math.random() * messages.length)];
+};
+
 export function WelcomeStep({ userName, userPhoneticName, onNext, onVoiceStateChange }: WelcomeStepProps) {
   const hasStartedRef = useRef(false);
 
@@ -20,7 +33,8 @@ export function WelcomeStep({ userName, userPhoneticName, onNext, onVoiceStateCh
     // Use phonetic name for speech, but display name for text
     const spokenName = userPhoneticName || userName;
     console.log('[WelcomeStep] userName:', userName, 'userPhoneticName:', userPhoneticName, 'spokenName:', spokenName);
-    const welcomeMessage = `Hello ${spokenName}! Welcome to ARIA, your intelligent household assistant. I'm here to help you manage your daily tasks, calendar, shopping, and more. Let's get you set up!`;
+    
+    const welcomeMessage = getWelcomeMessage(spokenName);
 
     playVoice({
       text: welcomeMessage,

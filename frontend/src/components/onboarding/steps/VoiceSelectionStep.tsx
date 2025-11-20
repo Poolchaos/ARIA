@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Volume2, Check } from 'lucide-react';
+import { userApi } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
 
 interface Voice {
   id: string;
@@ -27,10 +29,51 @@ interface VoiceSelectionStepProps {
 }
 
 export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSelectionStepProps) {
-  const [selectedVoice, setSelectedVoice] = useState<Voice>(AVAILABLE_VOICES[0]);
+  const { user, updateUser } = useAuthStore();
+  
+  // Initialize from user preferences or localStorage
+  const [selectedVoice, setSelectedVoice] = useState<Voice>(() => {
+    // Try user's saved preference first
+    if (user?.voiceName) {
+      const savedVoice = AVAILABLE_VOICES.find(v => v.name === user.voiceName);
+      if (savedVoice) return savedVoice;
+    }
+    
+    // Try localStorage
+    try {
+      const saved = localStorage.getItem('selectedVoice');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const voice = AVAILABLE_VOICES.find(v => v.id === parsed.id || v.name === parsed.name);
+        if (voice) return voice;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    
+    // Default to first voice
+    return AVAILABLE_VOICES[0];
+  });
+  
   const [isPlaying, setIsPlaying] = useState(false);
   const [gender, setGender] = useState<'all' | 'male' | 'female'>('all');
-  const [volume, setVolume] = useState(1.0);
+  const [volume, setVolume] = useState(() => {
+    // Try user's saved preference first
+    if (user?.voiceVolume !== undefined) {
+      return user.voiceVolume;
+    }
+    
+    // Try localStorage
+    try {
+      const saved = localStorage.getItem('voiceVolume');
+      if (saved) return parseFloat(saved);
+    } catch {
+      // Ignore parse errors
+    }
+    
+    return 1.0;
+  });
+  const [isSaving, setIsSaving] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const filteredVoices = AVAILABLE_VOICES.filter(v =>
@@ -111,11 +154,36 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
     }
   };
 
-  const handleContinue = () => {
-    // Save voice preference to local storage
-    localStorage.setItem('selectedVoice', JSON.stringify(selectedVoice));
-    localStorage.setItem('voiceVolume', volume.toString());
-    onNext();
+  const handleContinue = async () => {
+    try {
+      setIsSaving(true);
+
+      // Save to backend
+      await userApi.updatePreferences({
+        voiceName: selectedVoice.name,
+        voiceVolume: volume,
+      });
+
+      // Update local auth store
+      updateUser({
+        voiceName: selectedVoice.name,
+        voiceVolume: volume,
+      });
+
+      // Also save to localStorage for immediate access
+      localStorage.setItem('selectedVoice', JSON.stringify(selectedVoice));
+      localStorage.setItem('voiceVolume', volume.toString());
+
+      onNext();
+    } catch (error) {
+      console.error('Failed to save voice preferences:', error);
+      // Still proceed to next step even if save fails
+      localStorage.setItem('selectedVoice', JSON.stringify(selectedVoice));
+      localStorage.setItem('voiceVolume', volume.toString());
+      onNext();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -222,15 +290,17 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
       <div className="flex justify-between pt-6 border-t border-gray-700">
         <button
           onClick={onBack}
-          className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all"
+          disabled={isSaving}
+          className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Back
         </button>
         <button
           onClick={handleContinue}
-          className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-all"
+          disabled={isSaving}
+          className="px-6 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continue
+          {isSaving ? 'Saving...' : 'Continue'}
         </button>
       </div>
     </div>

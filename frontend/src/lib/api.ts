@@ -103,3 +103,46 @@ export const authApi = {
   logout: (refreshToken: string) =>
     api.post('/auth/logout', { refreshToken }),
 };
+
+// User API
+export interface UpdatePreferencesRequest {
+  voiceName?: string;
+  voicePitch?: number;
+  voiceRate?: number;
+  voiceVolume?: number;
+  selectedAvatar?: string;
+  selectedAvatarColor?: string;
+  selectedPersonality?: string;
+  onboardingCompleted?: boolean;
+  phoneticName?: string;
+}
+
+export interface UserResponse {
+  success: boolean;
+  data: {
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      phoneticName?: string;
+      role: 'admin' | 'member';
+      householdId: string;
+      voiceName?: string;
+      voicePitch?: number;
+      voiceRate?: number;
+      voiceVolume?: number;
+      selectedAvatar?: string;
+      selectedAvatarColor?: string;
+      selectedPersonality?: string;
+      onboardingCompleted?: boolean;
+    };
+  };
+}
+
+export const userApi = {
+  updatePreferences: (data: UpdatePreferencesRequest) =>
+    api.patch<UserResponse>('/user/preferences', data),
+
+  getCurrentUser: () =>
+    api.get<UserResponse>('/user/me'),
+};

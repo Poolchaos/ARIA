@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth.routes';
 import ttsRoutes from './routes/tts.routes';
+import userRoutes from './routes/user.routes';
 
 export const createApp = (): Express => {
   const app = express();
@@ -37,6 +38,7 @@ export const createApp = (): Express => {
   // API routes
   app.use('/auth', authRoutes);
   app.use('/tts', ttsRoutes);
+  app.use('/user', userRoutes);
 
   // 404 handler
   app.use((_req: Request, res: Response) => {
