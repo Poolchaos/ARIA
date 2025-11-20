@@ -29,6 +29,10 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
   const [audioLevel, setAudioLevel] = useState(0);
   const { user } = useAuthStore();
 
+  useEffect(() => {
+    console.log('[OnboardingModal] User object:', user);
+  }, [user]);
+
   const currentStepIndex = ONBOARDING_STEPS.indexOf(currentStep);
   const progress = ((currentStepIndex + 1) / ONBOARDING_STEPS.length) * 100;
 
@@ -128,6 +132,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               {currentStep === 'welcome' && (
                 <WelcomeStep
                   userName={user?.name || 'there'}
+                  userPhoneticName={user?.phoneticName}
                   onNext={nextStep}
                   onVoiceStateChange={setIsVoicePlaying}
                 />
@@ -154,6 +159,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
               {currentStep === 'complete' && (
                 <CompletionStep
                   onFinish={onComplete}
+                  onVoiceStateChange={setIsVoicePlaying}
                 />
               )}
             </motion.div>

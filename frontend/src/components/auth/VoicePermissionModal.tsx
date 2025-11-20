@@ -8,7 +8,7 @@ interface VoicePermissionModalProps {
 export function VoicePermissionModal({ onRequestPermission, onDismiss }: VoicePermissionModalProps) {
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <motion.div
           className="bg-gray-900 rounded-2xl p-8 max-w-md mx-4 border-2 border-primary-500/40 shadow-xl shadow-primary-500/10"
           initial={{ opacity: 0, scale: 0.9, y: 20 }}

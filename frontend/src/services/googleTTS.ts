@@ -166,7 +166,7 @@ export default class GoogleTTSService {
     }
 
     // Default fallback
-    return 'en-US-Neural2-F';
+    return 'en-US-Neural2-D';
   }
 
   dispose() {

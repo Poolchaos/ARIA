@@ -32,6 +32,7 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+  phoneticName String? // Phonetic pronunciation of the user's name
   role         String   @default("member") // "admin" | "member"
   householdId  String   @db.ObjectId
   household    Household @relation(fields: [householdId], references: [id])

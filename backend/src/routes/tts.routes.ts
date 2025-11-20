@@ -23,6 +23,7 @@ function getTTSClient(): TextToSpeechClient {
 interface SynthesizeRequest {
   text: string;
   voice?: string;
+  languageCode?: string;
   speakingRate?: number;
   pitch?: number;
 }
@@ -33,7 +34,8 @@ interface SynthesizeRequest {
  */
 router.post('/synthesize', async (req, res) => {
   try {
-    const { text, voice = 'en-US-Neural2-A', speakingRate = 1.0, pitch = 0 } = req.body as SynthesizeRequest;
+    console.log('[TTS] Request body:', req.body);
+    const { text, voice = 'en-US-Neural2-A', languageCode: explicitLanguageCode, speakingRate = 1.0, pitch = 0 } = req.body as SynthesizeRequest;
 
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
@@ -41,10 +43,16 @@ router.post('/synthesize', async (req, res) => {
 
     const client = getTTSClient();
 
+    // Extract language code from voice name (e.g., "en-GB-Neural2-A" -> "en-GB")
+    // Use explicit language code if provided, otherwise extract from voice name
+    const languageCode = explicitLanguageCode || voice.split('-').slice(0, 2).join('-');
+
+    console.log('[TTS] Processing:', { voice, languageCode, text });
+
     const [response] = await client.synthesizeSpeech({
       input: { text },
       voice: {
-        languageCode: 'en-US',
+        languageCode: languageCode || 'en-US',
         name: voice,
       },
       audioConfig: {

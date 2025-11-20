@@ -4,6 +4,7 @@ import { ParticleWave } from './ParticleWave';
 import { ParticleInput } from './ParticleInput';
 import { VoicePrompt } from './VoicePrompt';
 import { VoicePermissionModal } from './VoicePermissionModal';
+import { VoiceNameInput } from './VoiceNameInput';
 import { useAuthStateMachine } from './AuthStateMachine';
 import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
@@ -19,6 +20,10 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   const { setAuth } = useAuthStore();
   const [showVoicePermissionModal, setShowVoicePermissionModal] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [hasUserInteractedWithVoice, setHasUserInteractedWithVoice] = useState(() => {
+    // Check sessionStorage to see if user has interacted with voice in this session
+    return sessionStorage.getItem('aria_voice_session_active') === 'true';
+  });
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [replayVoice, setReplayVoice] = useState(0); // Trigger to replay voice prompt
   const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
@@ -33,6 +38,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
     canGoBack,
     canSubmit,
     errorMessage,
+    fieldError,
   } = useAuthStateMachine();
 
   // Initialize mode
@@ -49,84 +55,109 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
     const hasSeenVoiceModal = localStorage.getItem('aria_voice_modal_seen');
     const voicePreference = localStorage.getItem('aria_voice_enabled');
 
-    if (hasSeenVoiceModal && voicePreference === 'true') {
-      // User has previously enabled voice
-      setVoiceEnabled(true);
-    } else if (!hasSeenVoiceModal && 'speechSynthesis' in window) {
+    if (!hasSeenVoiceModal && 'speechSynthesis' in window) {
       // First time user - show permission modal
       const timer = setTimeout(() => {
         setShowVoicePermissionModal(true);
       }, 500);
       return () => clearTimeout(timer);
+    } else if (hasSeenVoiceModal && voicePreference === 'true') {
+      // User has previously enabled voice - enable it for TTS playback
+      // But don't start voice command recognition until user interacts this session
+      setVoiceEnabled(true);
     }
   }, [mode, dispatch]);
 
   // Handle form submission
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!canSubmit()) return;
-
     dispatch({ type: 'SUBMIT' });
-
-    try {
-      if (mode === 'login') {
-        const response = await authApi.login({
-          email: formData.email,
-          password: formData.password,
-        });
-        const { user, accessToken, refreshToken } = response.data.data;
-        setAuth(user, accessToken, refreshToken);
-        dispatch({ type: 'SUCCESS', userId: user.id });
-      } else if (mode === 'register') {
-        if (!formData.name || formData.password !== formData.confirmPassword) {
-          dispatch({
-            type: 'VALIDATION_ERROR',
-            message: formData.password !== formData.confirmPassword
-              ? "Hmm, those passwords don't match. Let's try again."
-              : "I need all the details to create your account.",
-          });
-          return;
-        }
-
-        const response = await authApi.register({
-          email: formData.email,
-          password: formData.password,
-          name: formData.name,
-        });
-        const { user, accessToken, refreshToken } = response.data.data;
-        setAuth(user, accessToken, refreshToken);
-        dispatch({ type: 'SUCCESS', userId: user.id });
-      } else {
-        // Forgot password
-        await authApi.forgotPassword(formData.email);
-        dispatch({ type: 'SUCCESS', userId: 'reset' });
-      }
-
-      // Success celebration
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#60A5FA', '#34D399', '#A78BFA'],
-      });
-
-      // Navigate to home after success
-      setTimeout(() => {
-        if (mode === 'forgot-password') {
-          navigate('/login');
-        } else {
-          navigate('/');
-        }
-      }, 3500);
-    } catch (error: unknown) {
-      const errorMessage = error && typeof error === 'object' && 'response' in error
-        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
-        : undefined;
-      dispatch({
-        type: 'ERROR',
-        message: errorMessage || 'Something went wrong. Let\'s give that another try.',
-      });
-    }
   };
+
+  // Handle API calls when state becomes processing
+  useEffect(() => {
+    console.log('[ParticleAuth] currentState changed:', currentState);
+    if (currentState !== 'processing') return;
+
+    console.log('[ParticleAuth] Processing submission, mode:', mode);
+    const performSubmission = async () => {
+      try {
+        if (mode === 'login') {
+          const response = await authApi.login({
+            email: formData.email,
+            password: formData.password,
+          });
+          const { user, accessToken, refreshToken } = response.data.data;
+          setAuth(user, accessToken, refreshToken);
+          dispatch({ type: 'SUCCESS', userId: user.id });
+        } else if (mode === 'register') {
+          if (!formData.name || formData.password !== formData.confirmPassword) {
+            dispatch({
+              type: 'VALIDATION_ERROR',
+              message: formData.password !== formData.confirmPassword
+                ? "Hmm, those passwords don't match. Let's try again."
+                : "I need all the details to create your account.",
+            });
+            return;
+          }
+
+          console.log('[ParticleAuth] Registering with formData:', formData);
+          const response = await authApi.register({
+            email: formData.email,
+            password: formData.password,
+            name: formData.name,
+            phoneticName: formData.phoneticName,
+          });
+          const { user, accessToken, refreshToken } = response.data.data;
+          setAuth(user, accessToken, refreshToken);
+          dispatch({ type: 'SUCCESS', userId: user.id });
+        } else {
+          // Forgot password
+          await authApi.forgotPassword(formData.email);
+          dispatch({ type: 'SUCCESS', userId: 'reset' });
+        }
+
+        // Success celebration
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#60A5FA', '#34D399', '#A78BFA'],
+        });
+
+        // Navigate to home after success (wait for audio to complete)
+        // Audio duration is ~3.24s, wait 4s to ensure completion + confetti
+        setTimeout(() => {
+          if (mode === 'forgot-password') {
+            navigate('/login');
+          } else {
+            navigate('/');
+          }
+        }, 4000);
+      } catch (error: unknown) {
+        console.log('[ParticleAuth] Submission error:', error);
+        let errorMessage = 'Something went wrong. Let\'s give that another try.';
+
+        if (error && typeof error === 'object' && 'response' in error) {
+          const responseData = (error as { response?: { data?: { error?: string, details?: Array<{ message: string }> } } }).response?.data;
+
+          if (responseData?.details && responseData.details.length > 0) {
+            errorMessage = responseData.details[0].message;
+          } else if (responseData?.error) {
+            errorMessage = responseData.error;
+          }
+        }
+
+        console.log('[ParticleAuth] Dispatching ERROR with message:', errorMessage);
+        dispatch({
+          type: 'ERROR',
+          message: errorMessage,
+        });
+      }
+    };
+
+    performSubmission();
+  }, [currentState, mode, formData, dispatch, navigate, setAuth]);
 
   // Handle enter key
   const handleEnter = () => {
@@ -174,7 +205,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             autoFocus
             onEnter={handleEnter}
             onEscape={handleEscape}
-            error={errorMessage || undefined}
+            error={(fieldError === 'email' || fieldError === null) ? errorMessage || undefined : undefined}
             autoComplete="email"
           />
         );
@@ -190,7 +221,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             autoFocus
             onEnter={handleEnter}
             onEscape={handleEscape}
-            error={errorMessage || undefined}
+            error={(fieldError === 'password' || fieldError === null) ? errorMessage || undefined : undefined}
             autoComplete="current-password"
           />
         );
@@ -206,8 +237,21 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             autoFocus
             onEnter={handleEnter}
             onEscape={handleEscape}
-            error={errorMessage || undefined}
+            error={(fieldError === 'name' || fieldError === null) ? errorMessage || undefined : undefined}
             autoComplete="name"
+          />
+        );
+
+      case 'name_pronunciation':
+        return (
+          <VoiceNameInput
+            name={formData.name || ''}
+            isAssistantSpeaking={isSpeaking}
+            onPhoneticNameCaptured={(phoneticName) => {
+              setFormField('phoneticName', phoneticName);
+              dispatch({ type: 'NEXT' });
+            }}
+            onSkip={() => dispatch({ type: 'NEXT' })}
           />
         );
 
@@ -221,7 +265,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
               onChange={(value) => setFormField('email', value)}
               placeholder="your@email.com"
               autoFocus
-              error={errorMessage || undefined}
+              error={(fieldError === 'email' || fieldError === null) ? errorMessage || undefined : undefined}
               autoComplete="email"
             />
             <ParticleInput
@@ -230,7 +274,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
               value={formData.password}
               onChange={(value) => setFormField('password', value)}
               placeholder="At least 8 characters"
-              error={errorMessage || undefined}
+              error={(fieldError === 'password' || fieldError === null) ? errorMessage || undefined : undefined}
               autoComplete="new-password"
             />
             <ParticleInput
@@ -240,9 +284,30 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
               onChange={(value) => setFormField('confirmPassword', value)}
               placeholder="One more time"
               onEnter={handleEnter}
-              error={errorMessage || undefined}
+              error={(fieldError === 'password' || fieldError === null) ? errorMessage || undefined : undefined}
               autoComplete="new-password"
             />
+          </div>
+        );
+
+      case 'processing':
+        return null;
+
+      case 'success':
+        return null;
+
+      case 'error':
+        return (
+          <div className="text-center animate-fade-in max-w-md mx-auto px-4">
+            <div className="text-red-400 text-lg mb-6 font-medium">
+              {errorMessage || "Something went wrong."}
+            </div>
+            <button
+              onClick={() => dispatch({ type: 'BACK' })}
+              className="px-6 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full font-medium transition-colors border border-white/20 backdrop-blur-sm"
+            >
+              Try Again
+            </button>
           </div>
         );
 
@@ -257,6 +322,8 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
     console.log('[ParticleAuth] Enable voice clicked');
     // Enable voice immediately
     setVoiceEnabled(true);
+    setHasUserInteractedWithVoice(true);
+    sessionStorage.setItem('aria_voice_session_active', 'true');
     setShowVoicePermissionModal(false);
     localStorage.setItem('aria_voice_modal_seen', 'true');
     localStorage.setItem('aria_voice_enabled', 'true');
@@ -268,6 +335,8 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
     }, 500);
   };  const handleSkipVoice = () => {
     setVoiceEnabled(false);
+    setHasUserInteractedWithVoice(true);
+    sessionStorage.setItem('aria_voice_session_active', 'false');
     setShowVoicePermissionModal(false);
     localStorage.setItem('aria_voice_modal_seen', 'true');
     localStorage.setItem('aria_voice_enabled', 'false');
@@ -281,12 +350,17 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
   // Voice command detection
   useEffect(() => {
-    if (!voiceEnabled) return;
+    // Only start voice recognition if voice is enabled AND user has interacted with the modal
+    if (!voiceEnabled || !hasUserInteractedWithVoice) return;
 
-    // @ts-ignore - SpeechRecognition is not in standard types yet
+    // Don't run voice commands during name pronunciation - user needs dedicated speech recognition
+    if (currentState === 'name_pronunciation') return;
+
+    // @ts-expect-error - SpeechRecognition is not in standard types yet
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
+    console.log('[ParticleAuth] Starting voice command recognition');
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
@@ -294,11 +368,17 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
     // Track if we intentionally stopped recognition to prevent unwanted restarts
     let isIntentionalStop = false;
+    let restartAttempts = 0;
+    const MAX_RESTART_ATTEMPTS = 3;
+    let restartTimeout: ReturnType<typeof setTimeout> | null = null;
 
     recognition.onresult = (event: any) => {
       const lastResult = event.results[event.results.length - 1];
       const command = lastResult[0].transcript.trim().toLowerCase();
-      console.log('Voice command detected:', command);
+      console.log('[ParticleAuth] Voice command detected:', command);
+
+      // Reset restart attempts on successful recognition
+      restartAttempts = 0;
 
       if (mode === 'login' && (command.includes('sign up') || command.includes('register') || command.includes('create account'))) {
         navigate('/register');
@@ -312,37 +392,60 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
     };
 
     recognition.onerror = (event: any) => {
-      // Ignore no-speech errors as they are common and we'll just restart
-      if (event.error === 'no-speech') {
+      // Ignore no-speech and aborted errors
+      if (event.error === 'no-speech' || event.error === 'aborted') {
         return;
       }
-      console.error('Speech recognition error', event.error);
+
+      // For other errors, increment restart attempts
+      console.error('[ParticleAuth] Speech recognition error:', event.error);
+      restartAttempts++;
+
+      // If we've hit max restart attempts, stop trying
+      if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
+        console.log('[ParticleAuth] Max restart attempts reached, stopping voice recognition');
+        isIntentionalStop = true;
+      }
     };
 
     recognition.onend = () => {
-      // Automatically restart if we didn't intentionally stop
-      if (!isIntentionalStop && voiceEnabled) {
-        try {
-          recognition.start();
-        } catch (e) {
-          console.error('Error restarting speech recognition:', e);
-        }
+      // Only restart if we didn't intentionally stop and haven't exceeded max attempts
+      if (!isIntentionalStop && voiceEnabled && restartAttempts < MAX_RESTART_ATTEMPTS) {
+        // Add a delay before restarting to prevent infinite loops
+        restartTimeout = setTimeout(() => {
+          try {
+            console.log('[ParticleAuth] Recognition ended, restarting... (attempt', restartAttempts + 1, ')');
+            recognition.start();
+          } catch (e) {
+            console.error('[ParticleAuth] Error restarting speech recognition:', e);
+            restartAttempts++;
+          }
+        }, 1000); // 1 second delay
+      } else if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
+        console.log('[ParticleAuth] Not restarting - max attempts reached');
       }
     };
 
     try {
       recognition.start();
     } catch (e) {
-      console.error('Error starting speech recognition:', e);
+      console.error('[ParticleAuth] Error starting speech recognition:', e);
+      restartAttempts = MAX_RESTART_ATTEMPTS; // Don't try to restart if initial start fails
     }
 
     return () => {
+      console.log('[ParticleAuth] Cleaning up voice command recognition');
       isIntentionalStop = true;
+      if (restartTimeout) {
+        clearTimeout(restartTimeout);
+      }
       try {
         recognition.stop();
-      } catch (e) {}
+      } catch {
+        // silently fail
+      }
     };
-  }, [voiceEnabled, currentState, mode, dispatch, navigate]);
+  }, [voiceEnabled, hasUserInteractedWithVoice, currentState, mode, dispatch, navigate]);
 
   return (
     <div className="relative w-full h-screen bg-dark-200 overflow-hidden">
@@ -365,11 +468,11 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
       {/* Voice Prompt */}
       <AnimatePresence mode="wait">
-        {voiceEnabled && voicePrompt.text && (
+        {voiceEnabled && (voicePrompt.text || errorMessage) && (
           <VoicePrompt
-            key={`${currentState}-${replayVoice}`}
-            text={voicePrompt.text}
-            emotion={voicePrompt.emotion}
+            key={`${currentState}-${replayVoice}-${errorMessage ? 'error' : 'prompt'}`}
+            text={errorMessage || voicePrompt.text}
+            emotion={errorMessage ? 'error' : voicePrompt.emotion}
             autoSpeak={voiceEnabled}
             voiceEnabled={voiceEnabled}
             onPermissionDenied={handleVoicePermissionDenied}

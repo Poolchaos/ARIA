@@ -66,6 +66,7 @@ export interface RegisterRequest {
   password: string;
   name: string;
   inviteCode?: string;
+  phoneticName?: string;
 }
 
 export interface LoginRequest {
@@ -80,6 +81,7 @@ export interface AuthResponse {
       id: string;
       email: string;
       name: string;
+      phoneticName?: string;
       role: 'admin' | 'member';
       householdId: string;
     };

@@ -1,5 +1,6 @@
 """Voice interface routes for real-time speech interaction."""
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from pydantic import BaseModel
 from typing import Dict, Any
 import json
 import base64
@@ -11,6 +12,10 @@ from .redis_client import get_redis
 
 router = APIRouter(prefix="/voice", tags=["voice"])
 voice_service = VoiceService()
+
+class TTSRequest(BaseModel):
+    text: str
+    voice_name: str = "en-US-AriaNeural"
 
 # Track active WebSocket connections
 active_connections: Dict[str, WebSocket] = {}
@@ -149,10 +154,10 @@ async def voice_stream(websocket: WebSocket):
 
 
 @router.post("/test-tts")
-async def test_text_to_speech(text: str, voice_name: str = "en-US-AriaNeural"):
+async def test_text_to_speech(request: TTSRequest):
     """Test endpoint for text-to-speech."""
     try:
-        audio_data = await voice_service.synthesize_speech(text, voice_name=voice_name)
+        audio_data = await voice_service.synthesize_speech(request.text, voice_name=request.voice_name)
         audio_base64 = base64.b64encode(audio_data).decode('utf-8')
         return {
             "success": True,

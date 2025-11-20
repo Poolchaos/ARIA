@@ -24,7 +24,7 @@ ARIA is a self-hosted voice assistant designed for small households (2-5 members
 ## Tech Stack
 
 - **Frontend:** React 19 + TypeScript + Vite + TailwindCSS + Three.js
-- **Backend:** Node.js + Express + Prisma (SQLite)
+- **Backend:** Node.js + Express + Prisma (MongoDB)
 - **Agent:** Python + FastAPI + LangChain
 - **Deployment:** Docker Compose (single command setup)
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Volume2, Check } from 'lucide-react';
 
@@ -31,51 +31,83 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
   const [isPlaying, setIsPlaying] = useState(false);
   const [gender, setGender] = useState<'all' | 'male' | 'female'>('all');
   const [volume, setVolume] = useState(1.0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const filteredVoices = AVAILABLE_VOICES.filter(v =>
     gender === 'all' || v.gender === gender
   );
 
   const playVoicePreview = async (voice: Voice) => {
-    if (isPlaying) return;
+    // Stop current audio if playing
+    if (audioRef.current) {
+      const currentAudio = audioRef.current;
+      currentAudio.pause();
+      const src = currentAudio.src;
+      audioRef.current = null;
+      if (src) {
+        URL.revokeObjectURL(src);
+      }
+    }
 
     try {
       setIsPlaying(true);
       onVoicePreview(true);
 
-      const response = await fetch('http://localhost:8002/voice/test-tts', {
+      const response = await fetch('http://localhost:5001/tts/synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: `Hi! I'm ${voice.displayName}. I'll be your voice assistant.`,
-          voice_name: voice.name,
+          voice: voice.name,
+          languageCode: voice.name.split('-').slice(0, 2).join('-'),
         }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Voice preview failed:', errorData);
+        throw new Error(errorData.error || `Voice preview failed: ${response.statusText}`);
+      }
+
       const data = await response.json();
-      const audioData = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+      if (!data.audioContent) {
+        throw new Error('Invalid voice preview response');
+      }
+
+      const audioData = Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0));
       const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
       const audioUrl = URL.createObjectURL(audioBlob);
+
       const audio = new Audio(audioUrl);
       audio.volume = volume;
+      audioRef.current = audio;
 
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
-        setIsPlaying(false);
-        onVoicePreview(false);
+        if (audioRef.current === audio) {
+          setIsPlaying(false);
+          onVoicePreview(false);
+          audioRef.current = null;
+        }
       };
 
       audio.onerror = () => {
         URL.revokeObjectURL(audioUrl);
-        setIsPlaying(false);
-        onVoicePreview(false);
+        if (audioRef.current === audio) {
+          setIsPlaying(false);
+          onVoicePreview(false);
+          audioRef.current = null;
+        }
       };
 
       await audio.play();
     } catch (error) {
       console.error('Voice preview error:', error);
-      setIsPlaying(false);
-      onVoicePreview(false);
+      // Only reset state if this is still the active audio request
+      if (!audioRef.current || audioRef.current.paused) {
+          setIsPlaying(false);
+          onVoicePreview(false);
+      }
     }
   };
 
@@ -141,14 +173,17 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
       </div>
 
       {/* Voice grid */}
-      <div className="grid grid-cols-2 gap-4 mb-8 flex-1 overflow-y-auto">
+      <div className="grid grid-cols-2 gap-4 mb-8 flex-1 overflow-y-auto overflow-x-hidden p-1">
         {filteredVoices.map((voice) => (
           <motion.div
             key={voice.id}
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             whileHover={{ scale: 1.02 }}
-            onClick={() => setSelectedVoice(voice)}
+            onClick={() => {
+              setSelectedVoice(voice);
+              playVoicePreview(voice);
+            }}
             className={`relative p-4 rounded-xl cursor-pointer transition-all ${
               selectedVoice.id === voice.id
                 ? 'bg-primary-500/20 border-2 border-primary-500'

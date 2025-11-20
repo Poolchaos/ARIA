@@ -1,26 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
+import { playVoice } from '@/services/audioService';
 
 interface WelcomeStepProps {
   userName: string;
+  userPhoneticName?: string;
   onNext: () => void;
   onVoiceStateChange: (isPlaying: boolean) => void;
 }
 
-export function WelcomeStep({ userName, onNext, onVoiceStateChange }: WelcomeStepProps) {
-  const [hasPlayedWelcome, setHasPlayedWelcome] = useState(false);
+export function WelcomeStep({ userName, userPhoneticName, onNext, onVoiceStateChange }: WelcomeStepProps) {
+  const hasStartedRef = useRef(false);
 
   useEffect(() => {
-    if (hasPlayedWelcome) return;
+    if (hasStartedRef.current) return;
+    hasStartedRef.current = true;
 
-    // Play welcome message
-    const welcomeMessage = `Hello ${userName}! Welcome to ARIA, your intelligent household assistant. I'm here to help you manage your daily tasks, calendar, shopping, and more. Let's get you set up!`;
+    // Use phonetic name for speech, but display name for text
+    const spokenName = userPhoneticName || userName;
+    console.log('[WelcomeStep] userName:', userName, 'userPhoneticName:', userPhoneticName, 'spokenName:', spokenName);
+    const welcomeMessage = `Hello ${spokenName}! Welcome to ARIA, your intelligent household assistant. I'm here to help you manage your daily tasks, calendar, shopping, and more. Let's get you set up!`;
 
-    playWelcomeVoice(welcomeMessage, onVoiceStateChange).then(() => {
-      setHasPlayedWelcome(true);
+    playVoice({
+      text: welcomeMessage,
+      onStateChange: onVoiceStateChange,
     });
-  }, [userName, hasPlayedWelcome, onVoiceStateChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount, prevent re-runs from prop changes
 
   return (
     <div className="flex flex-col items-center justify-center flex-1 text-center">
@@ -87,45 +94,4 @@ export function WelcomeStep({ userName, onNext, onVoiceStateChange }: WelcomeSte
       </motion.button>
     </div>
   );
-}
-
-async function playWelcomeVoice(text: string, onStateChange: (isPlaying: boolean) => void) {
-  try {
-    onStateChange(true);
-
-    // Call TTS API
-    const response = await fetch('http://localhost:8002/voice/test-tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        voice_name: 'en-US-GuyNeural', // Male voice for welcome
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('TTS request failed');
-    }
-
-    const data = await response.json();
-    const audioData = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
-    const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
-    const audioUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(audioUrl);
-
-    audio.onended = () => {
-      URL.revokeObjectURL(audioUrl);
-      onStateChange(false);
-    };
-
-    audio.onerror = () => {
-      URL.revokeObjectURL(audioUrl);
-      onStateChange(false);
-    };
-
-    await audio.play();
-  } catch (error) {
-    console.error('Failed to play welcome voice:', error);
-    onStateChange(false);
-  }
 }

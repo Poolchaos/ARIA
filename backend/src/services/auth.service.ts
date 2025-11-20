@@ -9,6 +9,7 @@ export interface RegisterInput {
   email: string;
   password: string;
   name: string;
+  phoneticName?: string;
   inviteCode?: string;
 }
 
@@ -26,12 +27,15 @@ export interface UserResponse {
   id: string;
   email: string;
   name: string;
+  phoneticName?: string;
   role: string;
   householdId: string;
 }
 
 export async function register(input: RegisterInput) {
-  const { email, password, name, inviteCode } = input;
+  const { email, password, name, phoneticName, inviteCode } = input;
+
+  console.log('[auth.service] Register called with:', { email, name, phoneticName, inviteCode });
 
   // Check if user already exists
   const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -76,10 +80,13 @@ export async function register(input: RegisterInput) {
       email,
       passwordHash,
       name,
+      phoneticName,
       role,
       householdId,
     },
   });
+
+  console.log('[auth.service] User created:', { id: user.id, email: user.email, name: user.name, phoneticName: user.phoneticName });
 
   // Update household createdById if new household
   if (role === 'admin') {
@@ -107,9 +114,12 @@ export async function register(input: RegisterInput) {
     id: user.id,
     email: user.email,
     name: user.name,
+    phoneticName: user.phoneticName || undefined,
     role: user.role,
     householdId: user.householdId,
   };
+
+  console.log('[auth.service] Returning user response from register:', userResponse);
 
   return { user: userResponse, accessToken, refreshToken };
 }
@@ -147,6 +157,7 @@ export async function login(input: LoginInput) {
     id: user.id,
     email: user.email,
     name: user.name,
+    phoneticName: user.phoneticName || undefined,
     role: user.role,
     householdId: user.householdId,
   };

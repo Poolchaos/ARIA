@@ -23,6 +23,7 @@ const registerSchema = z.object({
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
+  phoneticName: z.string().optional(),
   inviteCode: z.string().length(8).optional(),
 });
 
@@ -60,6 +61,7 @@ router.post('/register', async (req: Request, res: Response) => {
           id: result.user.id,
           email: result.user.email,
           name: result.user.name,
+          phoneticName: result.user.phoneticName,
           role: result.user.role,
           householdId: result.user.householdId,
         },
@@ -117,6 +119,7 @@ router.post('/login', async (req: Request, res: Response) => {
           id: result.user.id,
           email: result.user.email,
           name: result.user.name,
+          phoneticName: result.user.phoneticName,
           role: result.user.role,
           householdId: result.user.householdId,
         },

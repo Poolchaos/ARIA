@@ -80,6 +80,7 @@ export function VoicePrompt({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const currentAudioRef = useRef<{ stop: () => void } | null>(null);
   const isMountedRef = useRef(true);
+  const hasStartedRef = useRef(false);
 
   console.log('[VoicePrompt] Component rendered/updated:', { text, autoSpeak, voiceEnabled });
 
@@ -97,6 +98,13 @@ export function VoicePrompt({
     if (!voiceEnabled || !autoSpeak || !text) {
       return;
     }
+
+    // Prevent double execution in React Strict Mode
+    if (hasStartedRef.current) {
+      console.log('[VoicePrompt] Already started, skipping duplicate execution');
+      return;
+    }
+    hasStartedRef.current = true;
 
     // Check which TTS service to use (priority: Google > Azure > Web Speech)
     const hasGoogle = true; // Always available via backend
@@ -121,8 +129,8 @@ export function VoicePrompt({
           const speechOptions = {
             text,
             emotion: googleEmotion,
-            rate: emotion === 'happy' ? 1.1 : emotion === 'error' ? 0.9 : 1.0,
-            pitch: emotion === 'happy' ? 10 : emotion === 'error' ? -10 : 0,
+            rate: emotion === 'happy' ? 1.1 : 1.0,
+            pitch: emotion === 'happy' ? 5 : 0,
             volume,
           };
 
@@ -188,8 +196,8 @@ export function VoicePrompt({
           const speechOptions = {
             text,
             emotion: azureEmotion,
-            rate: emotion === 'happy' ? 1.1 : emotion === 'error' ? 0.9 : 1.0,
-            pitch: emotion === 'happy' ? 10 : emotion === 'error' ? -10 : 0,
+            rate: emotion === 'happy' ? 1.1 : 1.0,
+            pitch: emotion === 'happy' ? 5 : 0,
           };
 
           const audio = await tts.synthesize(speechOptions);
@@ -253,6 +261,7 @@ export function VoicePrompt({
       // Mark as cleaned up to prevent async operations from continuing
       isCleanedUp = true;
       isMountedRef.current = false;
+      hasStartedRef.current = false;
 
       // Clean up on unmount - cancel any speech
       if (currentAudioRef.current) {

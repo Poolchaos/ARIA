@@ -16,6 +16,7 @@ interface User {
   selectedAvatar?: string;
   selectedAvatarColor?: string;
   selectedPersonality?: string;
+  phoneticName?: string;
 }
 
 interface AuthState {
@@ -66,6 +67,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
       }),
     }
   )

@@ -1,14 +1,24 @@
 import { motion } from 'framer-motion';
 import { CheckCircle2, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { playVoice } from '@/services/audioService';
 
 interface CompletionStepProps {
   onFinish: () => void;
+  onVoiceStateChange: (isPlaying: boolean) => void;
 }
 
-export function CompletionStep({ onFinish }: CompletionStepProps) {
+export function CompletionStep({ onFinish, onVoiceStateChange }: CompletionStepProps) {
+  const hasStartedRef = useRef(false);
+
   useEffect(() => {
+    // Prevent double execution in React Strict Mode
+    if (hasStartedRef.current) {
+      return;
+    }
+    hasStartedRef.current = true;
+
     // Trigger confetti on mount
     confetti({
       particleCount: 100,
@@ -16,7 +26,18 @@ export function CompletionStep({ onFinish }: CompletionStepProps) {
       origin: { y: 0.6 },
       colors: ['#0ea5e9', '#3b82f6', '#8b5cf6', '#ec4899'],
     });
-  }, []);
+
+    // Play completion message
+    playVoice({
+      text: "Thank you for having me. I'm ready to help you manage your home.",
+      onStateChange: onVoiceStateChange,
+    });
+
+    return () => {
+      onVoiceStateChange(false);
+      hasStartedRef.current = false;
+    };
+  }, [onVoiceStateChange]);
 
   return (
     <div className="flex flex-col items-center justify-center flex-1 text-center">
@@ -36,7 +57,7 @@ export function CompletionStep({ onFinish }: CompletionStepProps) {
               repeat: Infinity,
               ease: 'linear',
             }}
-            className="absolute inset-0 bg-gradient-to-r from-primary-500 to-purple-500 rounded-full blur-2xl opacity-30"
+            className="absolute inset-0 bg-linear-to-r from-primary-500 to-purple-500 rounded-full blur-2xl opacity-30"
           ></motion.div>
           <CheckCircle2 className="w-24 h-24 text-primary-400 relative z-10" />
         </div>
@@ -87,7 +108,7 @@ export function CompletionStep({ onFinish }: CompletionStepProps) {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={onFinish}
-        className="px-12 py-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold rounded-xl shadow-lg transition-all text-lg"
+        className="px-12 py-4 bg-linear-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold rounded-xl shadow-lg transition-all text-lg"
       >
         Start Using ARIA
       </motion.button>

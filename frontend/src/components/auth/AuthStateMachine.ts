@@ -11,6 +11,7 @@ export type AuthState =
   | 'success'
   | 'error'
   | 'personal_details'
+  | 'name_pronunciation'
   | 'account_details';
 
 // Auth flow events
@@ -36,6 +37,7 @@ export interface AuthFormData {
   password: string;
   name?: string;
   confirmPassword?: string;
+  phoneticName?: string;
 }
 
 // Particle formation for each state
@@ -63,6 +65,9 @@ interface AuthStateMachineStore {
 
   // Error message
   errorMessage: string | null;
+
+  // Field with error (for targeted error display)
+  fieldError: string | null;
 
   // Success data
   userId: string | null;
@@ -101,7 +106,7 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
   },
   email: {
     login: {
-      text: "What's your email address?",
+      text: "What's your email address, or what would you like to do?",
       emotion: 'listening',
     },
     register: {
@@ -157,11 +162,11 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
   },
   processing: {
     login: {
-      text: "Looking for your profile...",
+      text: "Checking your credentials.",
       emotion: 'idle',
     },
     register: {
-      text: "Creating your account...",
+      text: "Creating your account.",
       emotion: 'idle',
     },
     'forgot-password': {
@@ -171,11 +176,11 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
   },
   success: {
     login: {
-      text: "Ah, there you are! Welcome back.",
+      text: "Welcome back. I'm logging you in.",
       emotion: 'success',
     },
     register: {
-      text: "All set! Welcome to ARIA!",
+      text: "Thank you for registering. I'm logging you in now.",
       emotion: 'success',
     },
     'forgot-password': {
@@ -202,6 +207,11 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
     register: { text: "Let's start with your name.", emotion: 'listening' },
     'forgot-password': { text: "", emotion: 'idle' }
   },
+  name_pronunciation: {
+    login: { text: "", emotion: 'idle' },
+    register: { text: "Great! Now, how do you pronounce that?", emotion: 'listening' },
+    'forgot-password': { text: "", emotion: 'idle' }
+  },
   account_details: {
     login: { text: "", emotion: 'idle' },
     register: { text: "Now, let's set up your email and password.", emotion: 'listening' },
@@ -220,12 +230,13 @@ const PARTICLE_FORMATIONS: Record<AuthState, ParticleFormation> = {
   success: 'scattered',
   error: 'face',
   personal_details: 'field',
+  name_pronunciation: 'field',
   account_details: 'field',
 };
 
 // State transitions
 const LOGIN_FLOW: AuthState[] = ['email', 'password', 'processing'];
-const REGISTER_FLOW: AuthState[] = ['personal_details', 'account_details', 'processing'];
+const REGISTER_FLOW: AuthState[] = ['personal_details', 'name_pronunciation', 'account_details', 'processing'];
 const FORGOT_PASSWORD_FLOW: AuthState[] = ['email', 'processing'];
 
 export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => ({
@@ -236,8 +247,10 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
     password: '',
     name: '',
     confirmPassword: '',
+    phoneticName: '',
   },
   errorMessage: null,
+  fieldError: null,
   userId: null,
   stateHistory: [],
 
@@ -259,6 +272,7 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
           stateHistory: [],
           formData: { email: '', password: '' },
           errorMessage: null,
+          fieldError: null,
           userId: null,
         });
         break;
@@ -268,8 +282,9 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
           mode: 'register',
           currentState: 'personal_details',
           stateHistory: [],
-          formData: { email: '', password: '', name: '', confirmPassword: '' },
+          formData: { email: '', password: '', name: '', confirmPassword: '', phoneticName: '' },
           errorMessage: null,
+          fieldError: null,
           userId: null,
         });
         break;
@@ -281,6 +296,7 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
           stateHistory: [],
           formData: { email: '', password: '', name: '', confirmPassword: '' },
           errorMessage: null,
+          fieldError: null,
           userId: null,
         });
         break;      case 'NEXT':
@@ -290,6 +306,7 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
             currentState: nextState,
             stateHistory: [...state.stateHistory, currentState],
             errorMessage: null,
+            fieldError: null,
           });
         }
         break;
@@ -302,11 +319,13 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
             currentState: previousState,
             stateHistory: newHistory,
             errorMessage: null,
+            fieldError: null,
           });
         }
         break;
 
       case 'SUBMIT':
+        console.log('[AuthStateMachine] SUBMIT action, transitioning to processing');
         set({
           currentState: 'processing',
           stateHistory: [...state.stateHistory, currentState],
@@ -314,10 +333,19 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
         break;
 
       case 'VALIDATION_ERROR':
+        // Determine which field has the error based on message
+        let fieldWithError = null;
+        const msg = event.message.toLowerCase();
+        if (msg.includes('email')) fieldWithError = 'email';
+        else if (msg.includes('password')) fieldWithError = 'password';
+        else if (msg.includes('name')) fieldWithError = 'name';
+
         set({
-          currentState: 'error',
+          // Keep current state to show error on the form
           errorMessage: event.message,
-          stateHistory: [...state.stateHistory, currentState],
+          fieldError: fieldWithError,
+          // currentState: 'error',
+          // stateHistory: [...state.stateHistory, currentState],
         });
         break;
 
@@ -326,16 +354,37 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
           currentState: 'success',
           userId: event.userId,
           errorMessage: null,
+          fieldError: null,
           stateHistory: [...state.stateHistory, currentState],
         });
         break;
 
       case 'ERROR':
-        set({
-          currentState: 'error',
-          errorMessage: event.message,
-          stateHistory: [...state.stateHistory, currentState],
-        });
+        // Determine which field has the error based on message
+        let errorField = null;
+        const errorMsg = event.message.toLowerCase();
+        if (errorMsg.includes('email')) errorField = 'email';
+        else if (errorMsg.includes('password')) errorField = 'password';
+        else if (errorMsg.includes('name')) errorField = 'name';
+
+        // If we are in processing state, we need to go back to the previous state (the form)
+        // so the user can correct the error.
+        if (state.currentState === 'processing' && state.stateHistory.length > 0) {
+          const previousState = state.stateHistory[state.stateHistory.length - 1];
+          const newHistory = state.stateHistory.slice(0, -1);
+          set({
+            currentState: previousState,
+            stateHistory: newHistory,
+            errorMessage: event.message,
+            fieldError: errorField,
+          });
+        } else {
+          // If not processing (or no history), just set the error message on current state
+          set({
+            errorMessage: event.message,
+            fieldError: errorField,
+          });
+        }
         break;
 
       case 'VOICE_COMMAND':
@@ -349,11 +398,14 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
   },
 
   setFormField: (field, value) => {
+    console.log('[AuthStateMachine] setFormField called:', { field, value });
     set((state) => ({
       formData: {
         ...state.formData,
         [field]: value,
       },
+      errorMessage: null,
+      fieldError: null,
     }));
   },
 
@@ -361,8 +413,9 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
     set({
       currentState: 'email',
       mode: 'login',
-      formData: { email: '', password: '', name: '', confirmPassword: '' },
+      formData: { email: '', password: '', name: '', confirmPassword: '', phoneticName: '' },
       errorMessage: null,
+      fieldError: null,
       userId: null,
       stateHistory: [],
     });
