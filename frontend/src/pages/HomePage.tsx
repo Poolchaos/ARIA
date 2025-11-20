@@ -310,10 +310,15 @@ export function HomePage() {
         }, 1000);
       }
 
-      // Update last command display
+      // Update last command display temporarily
       if (transcript) {
         console.log('[executeCommand] Setting last command:', transcript);
         setLastCommand(transcript);
+        // Clear the last command after 5 seconds
+        setTimeout(() => {
+          console.log('[executeCommand] Clearing last command display');
+          setLastCommand(null);
+        }, 5000);
       }
       setTimeout(() => setCurrentIntent(null), 3000);
 
@@ -329,7 +334,11 @@ export function HomePage() {
       isProcessingRef.current = false;
       setPendingCommand(null);
       pendingCommandRef.current = null;
-      console.log('[executeCommand] State cleared');
+
+      // CRITICAL: Reset to wake word listening mode
+      isListeningRef.current = false;
+      setIsListeningForCommand(false);
+      console.log('[executeCommand] Reset to wake word mode - waiting for "Hi Aria"');
 
       // Restart recognition after execution
       setTimeout(() => {
@@ -337,6 +346,7 @@ export function HomePage() {
           try {
             recognitionRef.current.start();
             isRecognitionRunning.current = true;
+            console.log('[executeCommand] Recognition restarted - ready for wake word');
           } catch (e) {
             console.error('Error restarting recognition:', e);
           }
@@ -347,41 +357,26 @@ export function HomePage() {
 
   // Handle confirmation response
   const handleConfirmation = async (transcript: string) => {
-    const lower = transcript.toLowerCase();
+    const lower = transcript.toLowerCase().trim();
 
-    if (lower.includes('yes') || lower.includes('correct') || lower.includes('right') || lower.includes('confirm')) {
-      console.log('[handleConfirmation] YES detected - starting confirmation flow');
+    // Helper to check if response is a simple yes/no (not part of ARIA's echo)
+    // Avoid matching ARIA's own question like "is that correct"
+    const words = lower.split(/\s+/);
 
-      // CRITICAL: Clear timeout immediately when user confirms
-      if (timeoutIdRef.current) {
-        console.log('[handleConfirmation] User confirmed - clearing timeout');
-        clearTimeout(timeoutIdRef.current);
-        timeoutIdRef.current = null;
-      } else {
-        console.log('[handleConfirmation] No timeout to clear');
-      }
+    // If transcript contains question words, it's likely ARIA's echo, not user response
+    if (lower.includes('is that') || lower.includes('are you') || lower.includes('do you')) {
+      console.log('[handleConfirmation] Ignoring - looks like echo of ARIA speech:', transcript);
+      return;
+    }
 
-      // Store the command from REF (not state - avoid closure issues)
-      const commandToExecute = pendingCommandRef.current;
-      console.log('[handleConfirmation] Stored command from REF:', commandToExecute);
+    // Check for NO first (prioritize negative over positive)
+    const noWords = ['no', 'nope', 'nah'];
+    const hasNo = noWords.some(word => words.includes(word));
 
-      // Close modal immediately
-      setPendingCommand(null);
-      pendingCommandRef.current = null;
-      console.log('[handleConfirmation] Cleared pendingCommand state - modal should close now');
+    if (hasNo || lower.includes('wrong') || lower.includes('again') ||
+        lower.includes('repeat') || lower.includes('retry')) {
+      console.log('[handleConfirmation] NO/RETRY detected - user wants to retry');
 
-      console.log('[handleConfirmation] About to speak confirmation message');
-      await speak('Okay, processing your request.');
-      console.log('[handleConfirmation] Finished speaking confirmation message');
-
-      if (commandToExecute) {
-        console.log('[handleConfirmation] Calling executeCommand with intent:', commandToExecute.intent);
-        await executeCommand(commandToExecute.intent, commandToExecute.transcript);
-        console.log('[handleConfirmation] executeCommand completed');
-      } else {
-        console.error('[handleConfirmation] ERROR: No command to execute!');
-      }
-    } else if (lower.includes('no') || lower.includes('wrong') || lower.includes('again') || lower.includes('repeat')) {
       // Clear timeout when user wants to retry
       if (timeoutIdRef.current) {
         console.log('[handleConfirmation] User wants retry - clearing timeout');
@@ -393,10 +388,14 @@ export function HomePage() {
       setPendingCommand(null);
       pendingCommandRef.current = null;
       setIsProcessing(false);
+      isProcessingRef.current = false; // CRITICAL: Clear the ref too!
       isListeningRef.current = true;
       setIsListeningForCommand(true);
+      console.log('[handleConfirmation] Retry - cleared processing state, waiting for new command');
       // speak() will auto-restart recognition when done
     } else if (lower.includes('stop') || lower.includes('cancel') || lower.includes('nevermind')) {
+      console.log('[handleConfirmation] CANCEL detected - user wants to cancel');
+
       // Clear timeout when user cancels
       if (timeoutIdRef.current) {
         console.log('[handleConfirmation] User cancelled - clearing timeout');
@@ -413,9 +412,47 @@ export function HomePage() {
       setCurrentIntent(null);
       // speak() will auto-restart recognition when done
     } else {
-      // Didn't understand confirmation, ask again
-      await speak('I didn\'t catch that. Please say yes to confirm, or no to try again.');
-      // speak() will auto-restart recognition when done
+      // Check for YES - simple word matching from split words
+      const yesWords = ['yes', 'yep', 'yeah', 'correct', 'right', 'confirm', 'yup'];
+      const hasYes = yesWords.some(word => words.includes(word));
+
+      if (hasYes) {
+        console.log('[handleConfirmation] YES detected - starting confirmation flow');
+
+        // CRITICAL: Clear timeout immediately when user confirms
+        if (timeoutIdRef.current) {
+          console.log('[handleConfirmation] User confirmed - clearing timeout');
+          clearTimeout(timeoutIdRef.current);
+          timeoutIdRef.current = null;
+        } else {
+          console.log('[handleConfirmation] No timeout to clear');
+        }
+
+        // Store the command from REF (not state - avoid closure issues)
+        const commandToExecute = pendingCommandRef.current;
+        console.log('[handleConfirmation] Stored command from REF:', commandToExecute);
+
+        // Close modal immediately
+        setPendingCommand(null);
+        pendingCommandRef.current = null;
+        console.log('[handleConfirmation] Cleared pendingCommand state - modal should close now');
+
+        console.log('[handleConfirmation] About to speak confirmation message');
+        await speak('Okay, processing your request.');
+        console.log('[handleConfirmation] Finished speaking confirmation message');
+
+        if (commandToExecute) {
+          console.log('[handleConfirmation] Calling executeCommand with intent:', commandToExecute.intent);
+          await executeCommand(commandToExecute.intent, commandToExecute.transcript);
+          console.log('[handleConfirmation] executeCommand completed');
+        } else {
+          console.error('[handleConfirmation] ERROR: No command to execute!');
+        }
+      } else {
+        // Didn't understand confirmation, ask again
+        await speak('I didn\'t catch that. Please say yes to confirm, or no to try again.');
+        // speak() will auto-restart recognition when done
+      }
     }
   };
 
