@@ -13,7 +13,7 @@ interface ParticleWaveProps {
  */
 export function ParticleWave({ isSpeaking = false, emotion = 'idle', className = '', audioAnalyser = null }: ParticleWaveProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number | undefined>();
+  const animationFrameRef = useRef<number | undefined>(undefined);
   const barWidthsRef = useRef<number[]>([]);
 
   useEffect(() => {

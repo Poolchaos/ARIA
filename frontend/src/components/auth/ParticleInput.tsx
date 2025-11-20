@@ -13,6 +13,7 @@ interface ParticleInputProps {
   disabled?: boolean;
   error?: string;
   voiceInput?: boolean;
+  autoComplete?: string;
 }
 
 export function ParticleInput({
@@ -27,6 +28,7 @@ export function ParticleInput({
   disabled = false,
   error,
   voiceInput = false,
+  autoComplete,
 }: ParticleInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -68,7 +70,7 @@ export function ParticleInput({
 
   return (
     <motion.div
-      className="relative w-full max-w-md"
+      className="relative w-full max-w-md pt-4"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
@@ -76,10 +78,10 @@ export function ParticleInput({
     >
       {/* Floating label */}
       <motion.label
-        className={`absolute left-4 transition-all duration-300 pointer-events-none ${
+        className={`absolute left-4 transition-all duration-300 pointer-events-none z-10 ${
           isFocused || value
-            ? '-top-2.5 text-xs text-primary-400 bg-dark-200 px-2'
-            : 'top-4 text-sm text-gray-400'
+            ? 'top-1.5 text-xs text-primary-400 bg-dark-200 px-2'
+            : 'top-8 text-sm text-gray-400'
         }`}
         htmlFor={label}
       >
@@ -99,6 +101,7 @@ export function ParticleInput({
           onKeyDown={handleKeyDown}
           placeholder={isFocused ? placeholder : ''}
           disabled={disabled}
+          autoComplete={autoComplete}
           className={`
             w-full px-4 py-4 rounded-xl
             bg-dark-300/30 backdrop-blur-sm

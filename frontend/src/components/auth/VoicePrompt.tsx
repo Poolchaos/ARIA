@@ -114,12 +114,16 @@ export function VoicePrompt({
         }
 
         try {
+          // Get volume preference
+          const volume = parseFloat(localStorage.getItem('voiceVolume') || '1.0');
+
           const googleEmotion = mapEmotionForGoogle(emotion);
           const speechOptions = {
             text,
             emotion: googleEmotion,
             rate: emotion === 'happy' ? 1.1 : emotion === 'error' ? 0.9 : 1.0,
             pitch: emotion === 'happy' ? 10 : emotion === 'error' ? -10 : 0,
+            volume,
           };
 
           console.log('[VoicePrompt] Synthesizing with options:', speechOptions);

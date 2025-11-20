@@ -9,12 +9,15 @@ export type AuthState =
   | 'confirmPassword'
   | 'processing'
   | 'success'
-  | 'error';
+  | 'error'
+  | 'personal_details'
+  | 'account_details';
 
 // Auth flow events
 export type AuthEvent =
   | { type: 'START_LOGIN' }
   | { type: 'START_REGISTER' }
+  | { type: 'START_FORGOT_PASSWORD' }
   | { type: 'NEXT' }
   | { type: 'BACK' }
   | { type: 'SUBMIT' }
@@ -25,7 +28,7 @@ export type AuthEvent =
   | { type: 'RESET' };
 
 // Auth mode
-export type AuthMode = 'login' | 'register';
+export type AuthMode = 'login' | 'register' | 'forgot-password';
 
 // Form data
 export interface AuthFormData {
@@ -91,6 +94,10 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
       text: "Hey there! Let's get you set up with a new account.",
       emotion: 'happy',
     },
+    'forgot-password': {
+      text: "No worries! Let's get your password reset.",
+      emotion: 'happy',
+    },
   },
   email: {
     login: {
@@ -99,6 +106,10 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
     },
     register: {
       text: "First, what's your email?",
+      emotion: 'listening',
+    },
+    'forgot-password': {
+      text: "What's the email address for your account?",
       emotion: 'listening',
     },
   },
@@ -111,6 +122,10 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
       text: "Choose a secure password. At least 8 characters, please.",
       emotion: 'listening',
     },
+    'forgot-password': {
+      text: "",
+      emotion: 'idle',
+    },
   },
   name: {
     login: {
@@ -120,6 +135,10 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
     register: {
       text: "Great! Now, what should I call you?",
       emotion: 'listening',
+    },
+    'forgot-password': {
+      text: "",
+      emotion: 'idle',
     },
   },
   confirmPassword: {
@@ -131,6 +150,10 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
       text: "One more time, just to make sure.",
       emotion: 'listening',
     },
+    'forgot-password': {
+      text: "",
+      emotion: 'idle',
+    },
   },
   processing: {
     login: {
@@ -139,6 +162,10 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
     },
     register: {
       text: "Creating your account...",
+      emotion: 'idle',
+    },
+    'forgot-password': {
+      text: "Sending reset instructions...",
       emotion: 'idle',
     },
   },
@@ -151,6 +178,10 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
       text: "All set! Welcome to ARIA!",
       emotion: 'success',
     },
+    'forgot-password': {
+      text: "Check your email! I've sent you a link to reset your password.",
+      emotion: 'success',
+    },
   },
   error: {
     login: {
@@ -161,6 +192,20 @@ const VOICE_PROMPTS: Record<AuthState, Record<AuthMode, VoicePrompt>> = {
       text: "Oops, hit a snag. Let's give that another shot.",
       emotion: 'error',
     },
+    'forgot-password': {
+      text: "I couldn't find that email. Want to try again?",
+      emotion: 'error',
+    },
+  },
+  personal_details: {
+    login: { text: "", emotion: 'idle' },
+    register: { text: "Let's start with your name.", emotion: 'listening' },
+    'forgot-password': { text: "", emotion: 'idle' }
+  },
+  account_details: {
+    login: { text: "", emotion: 'idle' },
+    register: { text: "Now, let's set up your email and password.", emotion: 'listening' },
+    'forgot-password': { text: "", emotion: 'idle' }
   },
 };
 
@@ -174,14 +219,17 @@ const PARTICLE_FORMATIONS: Record<AuthState, ParticleFormation> = {
   processing: 'loading',
   success: 'scattered',
   error: 'face',
+  personal_details: 'field',
+  account_details: 'field',
 };
 
 // State transitions
-const LOGIN_FLOW: AuthState[] = ['greeting', 'email', 'password', 'processing'];
-const REGISTER_FLOW: AuthState[] = ['greeting', 'name', 'email', 'password', 'confirmPassword', 'processing'];
+const LOGIN_FLOW: AuthState[] = ['email', 'password', 'processing'];
+const REGISTER_FLOW: AuthState[] = ['personal_details', 'account_details', 'processing'];
+const FORGOT_PASSWORD_FLOW: AuthState[] = ['email', 'processing'];
 
 export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => ({
-  currentState: 'greeting',
+  currentState: 'email',
   mode: 'login',
   formData: {
     email: '',
@@ -197,14 +245,17 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
     const state = get();
     const currentState = state.currentState;
     const mode = state.mode;
-    const flow = mode === 'login' ? LOGIN_FLOW : REGISTER_FLOW;
+    let flow = LOGIN_FLOW;
+    if (mode === 'register') flow = REGISTER_FLOW;
+    if (mode === 'forgot-password') flow = FORGOT_PASSWORD_FLOW;
+
     const currentIndex = flow.indexOf(currentState);
 
     switch (event.type) {
       case 'START_LOGIN':
         set({
           mode: 'login',
-          currentState: 'greeting',
+          currentState: 'email',
           stateHistory: [],
           formData: { email: '', password: '' },
           errorMessage: null,
@@ -215,7 +266,7 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
       case 'START_REGISTER':
         set({
           mode: 'register',
-          currentState: 'greeting',
+          currentState: 'personal_details',
           stateHistory: [],
           formData: { email: '', password: '', name: '', confirmPassword: '' },
           errorMessage: null,
@@ -223,7 +274,16 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
         });
         break;
 
-      case 'NEXT':
+      case 'START_FORGOT_PASSWORD':
+        set({
+          mode: 'forgot-password',
+          currentState: 'email',
+          stateHistory: [],
+          formData: { email: '', password: '', name: '', confirmPassword: '' },
+          errorMessage: null,
+          userId: null,
+        });
+        break;      case 'NEXT':
         if (currentIndex < flow.length - 1) {
           const nextState = flow[currentIndex + 1];
           set({
@@ -299,7 +359,7 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
 
   reset: () => {
     set({
-      currentState: 'greeting',
+      currentState: 'email',
       mode: 'login',
       formData: { email: '', password: '', name: '', confirmPassword: '' },
       errorMessage: null,
@@ -332,7 +392,7 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
 
     if (mode === 'login') {
       return !!formData.email && !!formData.password;
-    } else {
+    } else if (mode === 'register') {
       return (
         !!formData.name &&
         !!formData.email &&
@@ -340,6 +400,9 @@ export const useAuthStateMachine = create<AuthStateMachineStore>((set, get) => (
         !!formData.confirmPassword &&
         formData.password === formData.confirmPassword
       );
+    } else {
+      // forgot-password
+      return !!formData.email;
     }
   },
 }));
@@ -361,18 +424,35 @@ function handleVoiceCommand(command: string) {
       break;
 
     case 'login':
-      state.dispatch({ type: 'START_LOGIN' });
+    case 'log in':
+      // If we're already in login mode and can submit, treat this as a submit command
+      if (state.mode === 'login' && state.canSubmit()) {
+        state.dispatch({ type: 'SUBMIT' });
+      } else {
+        state.dispatch({ type: 'START_LOGIN' });
+      }
       break;
 
     case 'register':
     case 'sign up':
     case 'create account':
-      state.dispatch({ type: 'START_REGISTER' });
+      // If we're already in register mode and can submit, treat this as a submit command
+      if (state.mode === 'register' && state.canSubmit()) {
+        state.dispatch({ type: 'SUBMIT' });
+      } else {
+        state.dispatch({ type: 'START_REGISTER' });
+      }
+      break;
+
+    case 'forgot password':
+    case 'reset password':
+      state.dispatch({ type: 'START_FORGOT_PASSWORD' });
       break;
 
     case 'submit':
     case 'done':
     case 'finish':
+    case 'send':
       if (state.canSubmit()) {
         state.dispatch({ type: 'SUBMIT' });
       }

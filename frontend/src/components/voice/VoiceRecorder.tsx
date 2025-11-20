@@ -6,7 +6,7 @@ interface VoiceRecorderProps {
   onAudioData?: (blob: Blob) => void;
 }
 
-export function VoiceRecorder({ onTranscript, onAudioData }: VoiceRecorderProps) {
+export function VoiceRecorder({ onTranscript: _onTranscript, onAudioData }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);

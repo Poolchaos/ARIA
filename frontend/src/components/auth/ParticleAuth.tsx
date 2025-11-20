@@ -11,7 +11,7 @@ import confetti from 'canvas-confetti';
 import { authApi } from '../../lib/api';
 
 interface ParticleAuthProps {
-  mode: 'login' | 'register';
+  mode: 'login' | 'register' | 'forgot-password';
 }
 
 export function ParticleAuth({ mode }: ParticleAuthProps) {
@@ -37,7 +37,13 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
   // Initialize mode
   useEffect(() => {
-    dispatch({ type: mode === 'login' ? 'START_LOGIN' : 'START_REGISTER' });
+    if (mode === 'login') {
+      dispatch({ type: 'START_LOGIN' });
+    } else if (mode === 'register') {
+      dispatch({ type: 'START_REGISTER' });
+    } else {
+      dispatch({ type: 'START_FORGOT_PASSWORD' });
+    }
 
     // Check voice preference from localStorage
     const hasSeenVoiceModal = localStorage.getItem('aria_voice_modal_seen');
@@ -70,7 +76,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
         const { user, accessToken, refreshToken } = response.data.data;
         setAuth(user, accessToken, refreshToken);
         dispatch({ type: 'SUCCESS', userId: user.id });
-      } else {
+      } else if (mode === 'register') {
         if (!formData.name || formData.password !== formData.confirmPassword) {
           dispatch({
             type: 'VALIDATION_ERROR',
@@ -89,6 +95,10 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
         const { user, accessToken, refreshToken } = response.data.data;
         setAuth(user, accessToken, refreshToken);
         dispatch({ type: 'SUCCESS', userId: user.id });
+      } else {
+        // Forgot password
+        await authApi.forgotPassword(formData.email);
+        dispatch({ type: 'SUCCESS', userId: 'reset' });
       }
 
       // Success celebration
@@ -101,8 +111,12 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
       // Navigate to home after success
       setTimeout(() => {
-        navigate('/');
-      }, 2500);
+        if (mode === 'forgot-password') {
+          navigate('/login');
+        } else {
+          navigate('/');
+        }
+      }, 3500);
     } catch (error: unknown) {
       const errorMessage = error && typeof error === 'object' && 'response' in error
         ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
@@ -116,11 +130,9 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
 
   // Handle enter key
   const handleEnter = () => {
-    if (currentState === 'greeting') {
-      dispatch({ type: 'NEXT' });
-    } else if (canSubmit() && (currentState === 'password' || currentState === 'confirmPassword')) {
+    if (canSubmit() && (currentState === 'password' || currentState === 'account_details')) {
       handleSubmit();
-    } else if (getCurrentFieldValue()) {
+    } else if (isStepValid()) {
       dispatch({ type: 'NEXT' });
     }
   };
@@ -133,18 +145,18 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
   };
 
   // Get current field value
-  const getCurrentFieldValue = (): string => {
+  const isStepValid = (): boolean => {
     switch (currentState) {
       case 'email':
-        return formData.email;
+        return !!formData.email;
       case 'password':
-        return formData.password;
-      case 'name':
-        return formData.name || '';
-      case 'confirmPassword':
-        return formData.confirmPassword || '';
+        return !!formData.password;
+      case 'personal_details':
+        return !!formData.name;
+      case 'account_details':
+        return !!formData.email && !!formData.password && !!formData.confirmPassword;
       default:
-        return '';
+        return false;
     }
   };
 
@@ -163,6 +175,7 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             onEnter={handleEnter}
             onEscape={handleEscape}
             error={errorMessage || undefined}
+            autoComplete="email"
           />
         );
 
@@ -178,10 +191,11 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             onEnter={handleEnter}
             onEscape={handleEscape}
             error={errorMessage || undefined}
+            autoComplete="current-password"
           />
         );
 
-      case 'name':
+      case 'personal_details':
         return (
           <ParticleInput
             label="Name"
@@ -193,22 +207,43 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             onEnter={handleEnter}
             onEscape={handleEscape}
             error={errorMessage || undefined}
+            autoComplete="name"
           />
         );
 
-      case 'confirmPassword':
+      case 'account_details':
         return (
-          <ParticleInput
-            label="Confirm Password"
-            type="password"
-            value={formData.confirmPassword || ''}
-            onChange={(value) => setFormField('confirmPassword', value)}
-            placeholder="One more time"
-            autoFocus
-            onEnter={handleEnter}
-            onEscape={handleEscape}
-            error={errorMessage || undefined}
-          />
+          <div className="flex flex-col gap-4 w-full max-w-md">
+            <ParticleInput
+              label="Email"
+              type="email"
+              value={formData.email}
+              onChange={(value) => setFormField('email', value)}
+              placeholder="your@email.com"
+              autoFocus
+              error={errorMessage || undefined}
+              autoComplete="email"
+            />
+            <ParticleInput
+              label="Password"
+              type="password"
+              value={formData.password}
+              onChange={(value) => setFormField('password', value)}
+              placeholder="At least 8 characters"
+              error={errorMessage || undefined}
+              autoComplete="new-password"
+            />
+            <ParticleInput
+              label="Confirm Password"
+              type="password"
+              value={formData.confirmPassword || ''}
+              onChange={(value) => setFormField('confirmPassword', value)}
+              placeholder="One more time"
+              onEnter={handleEnter}
+              error={errorMessage || undefined}
+              autoComplete="new-password"
+            />
+          </div>
         );
 
       default:
@@ -243,6 +278,71 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
     console.log('[ParticleAuth] Voice permission denied, showing modal');
     setShowVoicePermissionModal(true);
   };
+
+  // Voice command detection
+  useEffect(() => {
+    if (!voiceEnabled) return;
+
+    // @ts-ignore - SpeechRecognition is not in standard types yet
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    // Track if we intentionally stopped recognition to prevent unwanted restarts
+    let isIntentionalStop = false;
+
+    recognition.onresult = (event: any) => {
+      const lastResult = event.results[event.results.length - 1];
+      const command = lastResult[0].transcript.trim().toLowerCase();
+      console.log('Voice command detected:', command);
+
+      if (mode === 'login' && (command.includes('sign up') || command.includes('register') || command.includes('create account'))) {
+        navigate('/register');
+      } else if (mode === 'login' && (command.includes('forgot password') || command.includes('reset password') || command.includes('forgot my password'))) {
+        navigate('/forgot-password');
+      } else if ((mode === 'register' || mode === 'forgot-password') && (command.includes('log in') || command.includes('sign in') || command.includes('login'))) {
+        navigate('/login');
+      } else {
+        dispatch({ type: 'VOICE_COMMAND', command });
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      // Ignore no-speech errors as they are common and we'll just restart
+      if (event.error === 'no-speech') {
+        return;
+      }
+      console.error('Speech recognition error', event.error);
+    };
+
+    recognition.onend = () => {
+      // Automatically restart if we didn't intentionally stop
+      if (!isIntentionalStop && voiceEnabled) {
+        try {
+          recognition.start();
+        } catch (e) {
+          console.error('Error restarting speech recognition:', e);
+        }
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error('Error starting speech recognition:', e);
+    }
+
+    return () => {
+      isIntentionalStop = true;
+      try {
+        recognition.stop();
+      } catch (e) {}
+    };
+  }, [voiceEnabled, currentState, mode, dispatch, navigate]);
 
   return (
     <div className="relative w-full h-screen bg-dark-200 overflow-hidden">
@@ -298,33 +398,35 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
             </button>
           )}
 
-          {currentState === 'greeting' && (
-            <button
-              onClick={() => dispatch({ type: 'NEXT' })}
-              className="px-6 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white transition-colors"
-            >
-              Let's go!
-            </button>
-          )}
-
-          {(currentState === 'email' || currentState === 'password' || currentState === 'name' || currentState === 'confirmPassword') && (
-            <div className="flex gap-2">
-              {getCurrentFieldValue() && currentState !== 'password' && currentState !== 'confirmPassword' && (
-                <button
-                  onClick={() => dispatch({ type: 'NEXT' })}
-                  className="px-4 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white transition-colors"
-                >
-                  Next →
-                </button>
+          {(currentState === 'email' || currentState === 'password' || currentState === 'personal_details' || currentState === 'account_details') && (
+            <div className="flex items-center gap-4">
+              {/* Next button for multi-step flows */}
+              {isStepValid() && currentState !== 'password' && currentState !== 'account_details' && mode !== 'forgot-password' && (
+                <div className="flex items-center gap-3">
+                  {voiceEnabled && <span className="text-xs italic text-gray-500">Say</span>}
+                  <button
+                    onClick={() => dispatch({ type: 'NEXT' })}
+                    className="px-6 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white transition-colors flex items-center gap-2"
+                  >
+                    Next ›
+                  </button>
+                </div>
               )}
 
-              {canSubmit() && (currentState === 'password' || currentState === 'confirmPassword') && (
-                <button
-                  onClick={handleSubmit}
-                  className="px-6 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white transition-colors font-medium"
-                >
-                  {mode === 'login' ? 'Log In' : 'Create Account'}
-                </button>
+              {/* Submit button */}
+              {canSubmit() && (
+                (currentState === 'password' || currentState === 'account_details') ||
+                (mode === 'forgot-password' && currentState === 'email')
+              ) && (
+                <div className="flex items-center gap-3">
+                  {voiceEnabled && <span className="text-xs italic text-gray-500">Say</span>}
+                  <button
+                    onClick={handleSubmit}
+                    className="px-6 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white transition-colors font-medium"
+                  >
+                    {mode === 'login' ? 'Log In' : mode === 'register' ? 'Create Account' : 'Reset Password'}
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -345,13 +447,31 @@ export function ParticleAuth({ mode }: ParticleAuthProps) {
       </div>
 
       {/* Mode toggle */}
-      <div className="absolute top-8 right-8">
+      <div className="absolute top-8 right-8 text-right">
+        <p className="text-sm text-gray-400 mb-1">
+          {mode === 'login'
+            ? "Don't have an account?"
+            : mode === 'register'
+              ? 'Already have an account?'
+              : 'Remember your password?'}
+        </p>
         <button
           onClick={() => navigate(mode === 'login' ? '/register' : '/login')}
-          className="text-sm text-gray-400 hover:text-gray-300 transition-colors"
+          className="text-sm font-medium text-primary-400 hover:text-primary-300 transition-colors flex items-center justify-end gap-2 ml-auto"
         >
-          {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Log in'}
+          {voiceEnabled && <span className="text-xs italic opacity-70">Say</span>}
+          {mode === 'login' ? 'Sign Up' : 'Log In'}
         </button>
+
+        {mode === 'login' && (
+          <button
+            onClick={() => navigate('/forgot-password')}
+            className="mt-2 text-xs text-gray-500 hover:text-gray-400 transition-colors flex items-center justify-end gap-2 ml-auto"
+          >
+            {voiceEnabled && <span className="text-[10px] italic opacity-70">Say</span>}
+            Forgot password?
+          </button>
+        )}
       </div>
     </div>
   );

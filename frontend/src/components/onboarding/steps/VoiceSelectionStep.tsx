@@ -12,14 +12,12 @@ interface Voice {
 }
 
 const AVAILABLE_VOICES: Voice[] = [
-  { id: 'en-US-GuyNeural', name: 'en-US-GuyNeural', displayName: 'Guy', gender: 'male', accent: 'American', description: 'Clear and professional' },
-  { id: 'en-US-DavisNeural', name: 'en-US-DavisNeural', displayName: 'Davis', gender: 'male', accent: 'American', description: 'Warm and friendly' },
-  { id: 'en-US-TonyNeural', name: 'en-US-TonyNeural', displayName: 'Tony', gender: 'male', accent: 'American', description: 'Energetic and upbeat' },
-  { id: 'en-US-AriaNeural', name: 'en-US-AriaNeural', displayName: 'Aria', gender: 'female', accent: 'American', description: 'Natural and expressive' },
-  { id: 'en-US-JennyNeural', name: 'en-US-JennyNeural', displayName: 'Jenny', gender: 'female', accent: 'American', description: 'Friendly and clear' },
-  { id: 'en-US-MichelleNeural', name: 'en-US-MichelleNeural', displayName: 'Michelle', gender: 'female', accent: 'American', description: 'Professional and calm' },
-  { id: 'en-GB-RyanNeural', name: 'en-GB-RyanNeural', displayName: 'Ryan', gender: 'male', accent: 'British', description: 'Sophisticated British' },
-  { id: 'en-GB-SoniaNeural', name: 'en-GB-SoniaNeural', displayName: 'Sonia', gender: 'female', accent: 'British', description: 'Elegant British' },
+  { id: 'en-US-Neural2-D', name: 'en-US-Neural2-D', displayName: 'David', gender: 'male', accent: 'American', description: 'Deep and calm' },
+  { id: 'en-US-Neural2-A', name: 'en-US-Neural2-A', displayName: 'Alex', gender: 'male', accent: 'American', description: 'Neutral and professional' },
+  { id: 'en-US-Neural2-F', name: 'en-US-Neural2-F', displayName: 'Aria', gender: 'female', accent: 'American', description: 'Friendly and expressive' },
+  { id: 'en-US-Neural2-C', name: 'en-US-Neural2-C', displayName: 'Clara', gender: 'female', accent: 'American', description: 'Soft and calm' },
+  { id: 'en-GB-Neural2-B', name: 'en-GB-Neural2-B', displayName: 'George', gender: 'male', accent: 'British', description: 'Sophisticated British' },
+  { id: 'en-GB-Neural2-A', name: 'en-GB-Neural2-A', displayName: 'Sarah', gender: 'female', accent: 'British', description: 'Elegant British' },
 ];
 
 interface VoiceSelectionStepProps {
@@ -32,6 +30,7 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
   const [selectedVoice, setSelectedVoice] = useState<Voice>(AVAILABLE_VOICES[0]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [gender, setGender] = useState<'all' | 'male' | 'female'>('all');
+  const [volume, setVolume] = useState(1.0);
 
   const filteredVoices = AVAILABLE_VOICES.filter(v =>
     gender === 'all' || v.gender === gender
@@ -58,6 +57,7 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
       const audioBlob = new Blob([audioData], { type: 'audio/mp3' });
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      audio.volume = volume;
 
       audio.onended = () => {
         URL.revokeObjectURL(audioUrl);
@@ -82,6 +82,7 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
   const handleContinue = () => {
     // Save voice preference to local storage
     localStorage.setItem('selectedVoice', JSON.stringify(selectedVoice));
+    localStorage.setItem('voiceVolume', volume.toString());
     onNext();
   };
 
@@ -101,8 +102,25 @@ export function VoiceSelectionStep({ onNext, onBack, onVoicePreview }: VoiceSele
           transition={{ delay: 0.1 }}
           className="text-gray-400"
         >
-          Select a voice that you'll love to hear
+          Select a voice that sounds best to you
         </motion.p>
+      </div>
+
+      {/* Volume Control */}
+      <div className="mb-6 px-4">
+        <div className="flex items-center gap-4 max-w-md mx-auto bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+          <Volume2 className="w-5 h-5 text-gray-400" />
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary-500"
+          />
+          <span className="text-sm text-gray-400 w-8 text-right">{Math.round(volume * 100)}%</span>
+        </div>
       </div>
 
       {/* Gender filter */}

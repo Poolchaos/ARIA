@@ -36,7 +36,7 @@ export function useVoiceActivityDetection({
         },
         positiveSpeechThreshold: 0.7, // Higher = less sensitive to false positives
         negativeSpeechThreshold: 0.35, // Lower = faster to detect speech end
-        redemptionFrames: 8, // Frames to wait before ending speech (prevents choppy detection)
+        // redemptionFrames: 8, // Frames to wait before ending speech (prevents choppy detection)
       });
 
       vadRef.current = vad;

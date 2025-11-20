@@ -95,6 +95,9 @@ export const authApi = {
   login: (data: LoginRequest) =>
     api.post<AuthResponse>('/auth/login', data),
 
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
+
   logout: (refreshToken: string) =>
     api.post('/auth/logout', { refreshToken }),
 };

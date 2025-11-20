@@ -9,6 +9,7 @@ interface SynthesizeOptions {
   emotion?: Emotion;
   rate?: number;
   pitch?: number;
+  volume?: number;
 }
 
 interface AudioResult {
@@ -30,9 +31,9 @@ export default class GoogleTTSService {
   }
 
   async synthesize(options: SynthesizeOptions): Promise<AudioResult> {
-    const { text, emotion = 'neutral', rate = 1.0, pitch = 0 } = options;
+    const { text, emotion = 'neutral', rate = 1.0, pitch = 0, volume = 1.0 } = options;
 
-    console.log('[GoogleTTS] Synthesizing:', { text, emotion, rate, pitch });
+    console.log('[GoogleTTS] Synthesizing:', { text, emotion, rate, pitch, volume });
 
     // Select voice based on emotion
     const voice = this.getVoiceForEmotion(emotion);
@@ -50,6 +51,7 @@ export default class GoogleTTSService {
           voice,
           speakingRate: rate,
           pitch,
+          volumeGainDb: 0, // Google TTS uses dB gain, but we'll handle volume on client side for now
         }),
       });
 
@@ -71,6 +73,7 @@ export default class GoogleTTSService {
       const audioBlob = new Blob([audioBytes], { type: 'audio/mp3' });
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
+      audio.volume = volume; // Apply client-side volume control
 
       let analyserNode: AnalyserNode | null = null;
       let sourceNode: MediaElementAudioSourceNode | null = null;
@@ -148,19 +151,22 @@ export default class GoogleTTSService {
     }
   }
 
-  private getVoiceForEmotion(emotion: Emotion): string {
-    // Google Cloud TTS Neural2 voices for different emotions
-    switch (emotion) {
-      case 'happy':
-        return 'en-US-Neural2-F'; // Cheerful female voice
-      case 'sad':
-        return 'en-US-Neural2-D'; // Softer male voice
-      case 'calm':
-        return 'en-US-Neural2-C'; // Calm female voice
-      case 'neutral':
-      default:
-        return 'en-US-Neural2-A'; // Neutral male voice
+  private getVoiceForEmotion(_emotion: Emotion): string {
+    // Check for user preference
+    try {
+      const savedVoice = localStorage.getItem('selectedVoice');
+      if (savedVoice) {
+        const voiceData = JSON.parse(savedVoice);
+        if (voiceData && voiceData.name) {
+          return voiceData.name;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse selected voice preference', e);
     }
+
+    // Default fallback
+    return 'en-US-Neural2-F';
   }
 
   dispose() {
