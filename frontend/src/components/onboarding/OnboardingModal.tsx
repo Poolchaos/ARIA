@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { VoiceVisualizer } from './VoiceVisualizer';
+import { ParticleWave } from '../auth/ParticleWave';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { VoiceSelectionStep } from './steps/VoiceSelectionStep';
 import { AvatarSelectionStep } from './steps/AvatarSelectionStep';
@@ -87,7 +87,7 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       {/* Background particle visualization */}
       <div className="absolute inset-0 opacity-30">
-        <VoiceVisualizer isActive={isVoicePlaying} audioLevel={audioLevel} />
+        <ParticleWave isSpeaking={isVoicePlaying} audioAnalyser={null} />
       </div>
 
       {/* Modal container */}

@@ -7,8 +7,9 @@ import { ParticleWave } from '@/components/auth/ParticleWave';
 import { LogOut, Calendar, ShoppingCart, Wallet, Package, Mic, Info, X, Edit2, Settings } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { playVoice } from '@/services/audioService';
-import { AudioWaveVisualization } from '@/components/dashboard/AudioWaveVisualization';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { getIntentService } from '@/services/intentService';
+import { getActionRouter } from '@/services/actionHandlers';
 import {
   containsProfanity,
   updateProfanityState,
@@ -59,7 +60,23 @@ export function HomePage() {
   const [showPhoneticModal, setShowPhoneticModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [phoneticNameInput, setPhoneticNameInput] = useState('');
+  const [audioAnalyser, setAudioAnalyser] = useState<AnalyserNode | null>(null);
+  const [isListeningForCommand, setIsListeningForCommand] = useState(false);
+  const [currentIntent, setCurrentIntent] = useState<string | null>(null);
+  const [pendingCommand, setPendingCommand] = useState<{ transcript: string; intent: any } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const userRef = useRef(user);
+  const isListeningRef = useRef(false);
+  const recognitionRef = useRef<any>(null);
+  const isRecognitionRunning = useRef(false);
+  const isSpeakingRef = useRef(false); // Track if ARIA is currently speaking
+  const isProcessingRef = useRef(false); // Track if we're processing a command
+  const pendingCommandRef = useRef<{ transcript: string; intent: any } | null>(null); // Track pending command
+  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null); // Track confirmation timeout
+
+  // Get services
+  const intentService = getIntentService();
+  const actionRouter = getActionRouter();
 
   useEffect(() => {
     userRef.current = user;
@@ -73,28 +90,376 @@ export function HomePage() {
   }, [user]);
 
   const speak = async (text: string) => {
+    console.log('[speak] Starting to speak, stopping recognition');
+
+    // CRITICAL: Stop recognition BEFORE speaking
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+        isRecognitionRunning.current = false;
+        console.log('[speak] Recognition stopped successfully');
+      } catch (e) {
+        console.error('[speak] Error stopping recognition:', e);
+      }
+    }
+
+    // Set speaking flag IMMEDIATELY
+    isSpeakingRef.current = true;
+
+    // Wait a moment for recognition to fully stop
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     await playVoice({
       text,
-      onStateChange: setIsSpeaking,
+      onStateChange: (speaking) => {
+        console.log('[speak] onStateChange - speaking:', speaking);
+        setIsSpeaking(speaking);
+        isSpeakingRef.current = speaking;
+
+        // Restart recognition ONLY when completely finished speaking
+        if (!speaking) {
+          console.log('[speak] Finished speaking, will restart recognition in 1 second');
+          setTimeout(() => {
+            if (!isRecognitionRunning.current && recognitionRef.current) {
+              try {
+                recognitionRef.current.start();
+                isRecognitionRunning.current = true;
+                console.log('[speak] Recognition restarted after speaking');
+              } catch (e) {
+                if (!(e instanceof Error) || !e.message?.includes('already started')) {
+                  console.error('[speak] Error restarting recognition after speech:', e);
+                }
+              }
+            }
+          }, 1000); // Longer delay to ensure audio is completely done
+        }
+      },
+      onAnalyserReady: setAudioAnalyser,
     });
   };
 
-  // Voice command detection
+  // Timeout for pending command confirmation (15 seconds)
+  useEffect(() => {
+    if (!pendingCommand) return;
+
+    const timeoutId = setTimeout(() => {
+      console.log('[Timeout] No confirmation received in 15 seconds, cancelling command');
+      speak('No response received. Cancelling command.');
+      setPendingCommand(null);
+      pendingCommandRef.current = null;
+      setIsProcessing(false);
+      isListeningRef.current = false;
+      setIsListeningForCommand(false);
+      setCurrentIntent(null);
+
+      // Restart recognition
+      setTimeout(() => {
+        if (recognitionRef.current && !isRecognitionRunning.current) {
+          try {
+            recognitionRef.current.start();
+            isRecognitionRunning.current = true;
+          } catch (e) {
+            console.error('Error restarting recognition:', e);
+          }
+        }
+      }, 1000);
+    }, 15000); // 15 second timeout
+
+    // Store timeout ID so it can be cancelled when command executes
+    timeoutIdRef.current = timeoutId;
+
+    return () => {
+      console.log('[Timeout] Clearing timeout');
+      clearTimeout(timeoutId);
+      timeoutIdRef.current = null;
+    };
+  }, [pendingCommand]);
+
+  // Handle voice commands with intent analysis
+  const handleVoiceCommand = async (transcript: string) => {
+    try {
+      console.log('[HomePage] Processing voice command:', transcript);
+      setCurrentIntent('Analyzing...');
+      setIsProcessing(true);
+      isProcessingRef.current = true;
+
+      // Pause voice recognition while processing
+      if (recognitionRef.current && isRecognitionRunning.current) {
+        recognitionRef.current.stop();
+        isRecognitionRunning.current = false;
+      }
+
+      // Analyze intent
+      const intent = await intentService.analyzeIntent(transcript, {
+        user: userRef.current,
+        currentPage: 'home',
+      });
+
+      console.log('[HomePage] Intent analysis:', intent);
+      setCurrentIntent(intent.intentType);
+
+      // Store pending command for confirmation
+      setPendingCommand({ transcript, intent });
+      pendingCommandRef.current = { transcript, intent };
+
+      // Ask for confirmation
+      const confirmationMessage = `I heard you say: "${transcript}". Is that correct?`;
+      await speak(confirmationMessage);
+
+      // Set flag to wait for confirmation
+      isListeningRef.current = true;
+      setIsListeningForCommand(true);
+      setCurrentIntent('Awaiting confirmation...');
+
+      // Resume recognition after speaking
+      setTimeout(() => {
+        // Double check it's not already running
+        if (recognitionRef.current && !isRecognitionRunning.current) {
+          try {
+            recognitionRef.current.start();
+            isRecognitionRunning.current = true;
+          } catch (e) {
+            // Only log if it's not already started
+            if (!(e instanceof Error) || !e.message?.includes('already started')) {
+              console.error('Error restarting recognition:', e);
+            }
+          }
+        }
+      }, 1000);
+
+    } catch (error) {
+      console.error('[HomePage] Voice command error:', error);
+      await speak('Sorry, I had trouble processing that. Could you try again?');
+      setCurrentIntent(null);
+      setIsProcessing(false);
+      isProcessingRef.current = false;
+      setPendingCommand(null);
+      pendingCommandRef.current = null;
+
+      // Restart recognition
+      setTimeout(() => {
+        if (recognitionRef.current && !isRecognitionRunning.current) {
+          try {
+            recognitionRef.current.start();
+            isRecognitionRunning.current = true;
+          } catch (e) {
+            if (!(e instanceof Error) || !e.message?.includes('already started')) {
+              console.error('Error restarting recognition:', e);
+            }
+          }
+        }
+      }, 1000);
+    }
+  };
+
+  // Execute confirmed command
+  const executeCommand = async (intent: any, transcript?: string) => {
+    console.log('[executeCommand] ========== STARTING EXECUTION ==========');
+    console.log('[executeCommand] Intent received:', intent);
+    console.log('[executeCommand] Transcript received:', transcript);
+
+    try {
+      // CRITICAL: Clear the confirmation timeout to prevent it from firing mid-execution
+      if (timeoutIdRef.current) {
+        console.log('[executeCommand] Clearing confirmation timeout');
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      } else {
+        console.log('[executeCommand] No timeout to clear');
+      }
+
+      console.log('[executeCommand] Setting current intent to Executing...');
+      setCurrentIntent('Executing...');
+
+      console.log('[executeCommand] About to call actionRouter.route');
+      console.log('[executeCommand] ActionRouter:', actionRouter);
+      console.log('[executeCommand] User:', userRef.current);
+
+      // Route to appropriate action handler
+      const result = await actionRouter.route(intent, {
+        user: userRef.current,
+        navigate,
+        setShowSettings,
+      });
+
+      console.log('[executeCommand] ========== ACTION ROUTER COMPLETED ==========');
+      console.log('[executeCommand] Action result:', result);
+
+      // Speak the response
+      if (result.message) {
+        console.log('[executeCommand] About to speak result message:', result.message);
+        await speak(result.message);
+        console.log('[executeCommand] Finished speaking result message');
+      } else {
+        console.log('[executeCommand] No message to speak');
+      }
+
+      // Handle navigation
+      if (result.navigationTarget) {
+        console.log('[executeCommand] Scheduling navigation to:', result.navigationTarget);
+        setTimeout(() => {
+          navigate(result.navigationTarget!);
+        }, 2000);
+      }
+
+      // Handle modals
+      if (result.modalType === 'settings') {
+        console.log('[executeCommand] Scheduling settings modal open');
+        setTimeout(() => {
+          setShowSettings(true);
+        }, 1000);
+      }
+
+      // Update last command display
+      if (transcript) {
+        console.log('[executeCommand] Setting last command:', transcript);
+        setLastCommand(transcript);
+      }
+      setTimeout(() => setCurrentIntent(null), 3000);
+
+    } catch (error) {
+      console.error('[executeCommand] ========== ERROR OCCURRED ==========');
+      console.error('[executeCommand] Command execution error:', error);
+      console.error('[executeCommand] Error stack:', error instanceof Error ? error.stack : 'N/A');
+      await speak('Sorry, something went wrong while executing that command.');
+    } finally {
+      console.log('[executeCommand] ========== FINALLY BLOCK - CLEANUP ==========');
+      console.log('[executeCommand] Clearing processing state');
+      setIsProcessing(false);
+      isProcessingRef.current = false;
+      setPendingCommand(null);
+      pendingCommandRef.current = null;
+      console.log('[executeCommand] State cleared');
+
+      // Restart recognition after execution
+      setTimeout(() => {
+        if (recognitionRef.current && !isRecognitionRunning.current) {
+          try {
+            recognitionRef.current.start();
+            isRecognitionRunning.current = true;
+          } catch (e) {
+            console.error('Error restarting recognition:', e);
+          }
+        }
+      }, 1000);
+    }
+  };
+
+  // Handle confirmation response
+  const handleConfirmation = async (transcript: string) => {
+    const lower = transcript.toLowerCase();
+
+    if (lower.includes('yes') || lower.includes('correct') || lower.includes('right') || lower.includes('confirm')) {
+      console.log('[handleConfirmation] YES detected - starting confirmation flow');
+
+      // CRITICAL: Clear timeout immediately when user confirms
+      if (timeoutIdRef.current) {
+        console.log('[handleConfirmation] User confirmed - clearing timeout');
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      } else {
+        console.log('[handleConfirmation] No timeout to clear');
+      }
+
+      // Store the command from REF (not state - avoid closure issues)
+      const commandToExecute = pendingCommandRef.current;
+      console.log('[handleConfirmation] Stored command from REF:', commandToExecute);
+
+      // Close modal immediately
+      setPendingCommand(null);
+      pendingCommandRef.current = null;
+      console.log('[handleConfirmation] Cleared pendingCommand state - modal should close now');
+
+      console.log('[handleConfirmation] About to speak confirmation message');
+      await speak('Okay, processing your request.');
+      console.log('[handleConfirmation] Finished speaking confirmation message');
+
+      if (commandToExecute) {
+        console.log('[handleConfirmation] Calling executeCommand with intent:', commandToExecute.intent);
+        await executeCommand(commandToExecute.intent, commandToExecute.transcript);
+        console.log('[handleConfirmation] executeCommand completed');
+      } else {
+        console.error('[handleConfirmation] ERROR: No command to execute!');
+      }
+    } else if (lower.includes('no') || lower.includes('wrong') || lower.includes('again') || lower.includes('repeat')) {
+      // Clear timeout when user wants to retry
+      if (timeoutIdRef.current) {
+        console.log('[handleConfirmation] User wants retry - clearing timeout');
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      }
+
+      await speak('Okay, please say your command again.');
+      setPendingCommand(null);
+      pendingCommandRef.current = null;
+      setIsProcessing(false);
+      isListeningRef.current = true;
+      setIsListeningForCommand(true);
+      // speak() will auto-restart recognition when done
+    } else if (lower.includes('stop') || lower.includes('cancel') || lower.includes('nevermind')) {
+      // Clear timeout when user cancels
+      if (timeoutIdRef.current) {
+        console.log('[handleConfirmation] User cancelled - clearing timeout');
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      }
+
+      await speak('Okay, cancelled.');
+      setPendingCommand(null);
+      pendingCommandRef.current = null;
+      setIsProcessing(false);
+      isListeningRef.current = false;
+      setIsListeningForCommand(false);
+      setCurrentIntent(null);
+      // speak() will auto-restart recognition when done
+    } else {
+      // Didn't understand confirmation, ask again
+      await speak('I didn\'t catch that. Please say yes to confirm, or no to try again.');
+      // speak() will auto-restart recognition when done
+    }
+  };
+
+  // Initialize speech recognition once on mount
   useEffect(() => {
     // @ts-expect-error - SpeechRecognition is not in standard types yet
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      console.warn('[Recognition] Speech recognition not supported');
+      return;
+    }
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = false;
     recognition.lang = 'en-US';
 
+    // Store reference for start/stop control
+    recognitionRef.current = recognition;
+
     recognition.onresult = (event: any) => {
       const lastResult = event.results[event.results.length - 1];
       const transcript = lastResult[0].transcript.trim().toLowerCase();
 
-      console.log('Voice input:', transcript);
+      console.log('[Recognition] Voice input:', transcript, 'isSpeaking:', isSpeakingRef.current, 'isProcessing:', isProcessingRef.current, 'pendingCommand:', !!pendingCommandRef.current);
+
+      // Ignore empty or whitespace-only transcripts
+      if (!transcript || transcript.length === 0) {
+        console.log('[Recognition] Ignoring empty transcript');
+        return;
+      }
+
+      // CRITICAL: Ignore input while ARIA is speaking
+      if (isSpeakingRef.current) {
+        console.log('[Recognition] BLOCKED - ARIA is speaking, ignoring:', transcript);
+        return;
+      }
+
+      // CRITICAL: Don't process new commands while already processing one
+      // BUT allow confirmation responses when we have a pending command
+      if (isProcessingRef.current && !pendingCommandRef.current) {
+        console.log('[Recognition] BLOCKED - Already processing a command, ignoring:', transcript);
+        return;
+      }
 
       const currentUser = userRef.current;
 
@@ -116,8 +481,18 @@ export function HomePage() {
         }
       }
 
+      // If we have a pending command, handle confirmation
+      if (pendingCommandRef.current) {
+        handleConfirmation(transcript);
+        return;
+      }
+
       // Wake word detection
       if (transcript.includes('aria') || transcript.includes('hey aria')) {
+        setIsListeningForCommand(true);
+        isListeningRef.current = true;
+        setCurrentIntent('Listening...');
+
         const nameToUse = currentUser?.phoneticName || currentUser?.name?.split(' ')[0];
 
         let response: string;
@@ -141,9 +516,19 @@ export function HomePage() {
         }
 
         speak(response);
+        return; // Wait for next command
       }
 
-      // Commands
+      // If we're listening for a command after wake word, process it with intent service
+      if (isListeningRef.current) {
+        console.log('[HomePage] Processing command after wake word:', transcript);
+        setIsListeningForCommand(false);
+        isListeningRef.current = false;
+        handleVoiceCommand(transcript);
+        return;
+      }
+
+      // Legacy simple commands (fallback)
       if (transcript.includes('logout') || transcript.includes('log out') || transcript.includes('sign out')) {
         setLastCommand('Logout');
         handleLogout();
@@ -156,18 +541,70 @@ export function HomePage() {
       }
     };
 
+    recognition.onerror = (event: any) => {
+      console.error('[Recognition] Error:', event.error);
+      isRecognitionRunning.current = false;
+
+      // Don't restart on 'aborted' - only restart on legitimate errors
+      if (event.error === 'no-speech' || event.error === 'audio-capture') {
+        setTimeout(() => {
+          if (!isRecognitionRunning.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+              isRecognitionRunning.current = true;
+            } catch (e) {
+              console.error('Error restarting recognition:', e);
+            }
+          }
+        }, 1000);
+      }
+    };
+
+    recognition.onend = () => {
+      console.log('[Recognition] onend fired, isRecognitionRunning:', isRecognitionRunning.current, 'isSpeaking:', isSpeakingRef.current);
+      isRecognitionRunning.current = false;
+
+      // CRITICAL: Do NOT auto-restart if ARIA is speaking or processing
+      if (isSpeakingRef.current || isProcessingRef.current) {
+        console.log('[Recognition] onend - NOT restarting (speaking or processing)');
+        return;
+      }
+
+      // Auto-restart unless intentionally stopped
+      setTimeout(() => {
+        // Triple check before restarting
+        if (!isRecognitionRunning.current && !isSpeakingRef.current && !isProcessingRef.current && recognitionRef.current) {
+          try {
+            console.log('[Recognition] Auto-restarting after end');
+            recognitionRef.current.start();
+            isRecognitionRunning.current = true;
+          } catch (e) {
+            // Only log if it's not already started
+            if (!(e instanceof Error) || !e.message?.includes('already started')) {
+              console.error('Error restarting recognition after end:', e);
+            }
+          }
+        }
+      }, 500);
+    };    // Start recognition on mount
+    console.log('[Recognition] Starting speech recognition');
     try {
       recognition.start();
+      isRecognitionRunning.current = true;
     } catch (e) {
       console.error('Error starting speech recognition:', e);
     }
 
     return () => {
+      console.log('[Recognition] Cleanup - stopping recognition');
       try {
         recognition.stop();
-      } catch {}
+        isRecognitionRunning.current = false;
+      } catch (e) {
+        console.error('Error stopping recognition:', e);
+      }
     };
-  }, []);
+  }, []); // Run once on mount
 
   const handleLogout = async () => {
     try {
@@ -324,22 +761,89 @@ export function HomePage() {
         )}
       </AnimatePresence>
 
+      {/* Voice Command Confirmation Modal */}
+      <AnimatePresence>
+        {pendingCommand && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            />
+
+            {/* Confirmation Card */}
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="relative bg-dark-300 border border-primary-500/30 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            >
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-primary-500/20 rounded-xl">
+                  <Mic className="w-6 h-6 text-primary-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-white mb-1">I heard you say:</h3>
+                  <p className="text-gray-300 mb-4 italic">"{pendingCommand.transcript}"</p>
+                  <p className="text-sm text-gray-400 mb-4">Is this correct?</p>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={async () => {
+                        await handleConfirmation('yes');
+                      }}
+                      className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors font-medium"
+                    >
+                      ✓ Yes
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await handleConfirmation('no');
+                      }}
+                      className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+                    >
+                      ↻ Say Again
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await handleConfirmation('cancel');
+                      }}
+                      className="px-4 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors font-medium"
+                    >
+                      ✕ Cancel
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-gray-500 mt-3 text-center">
+                    Say "yes", "no", or "cancel"
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="relative min-h-screen bg-dark-200 overflow-hidden text-white">
         {/* Background Wave */}
         <div className="absolute inset-0 opacity-50 pointer-events-none">
           <ParticleWave
             isSpeaking={isSpeaking}
             emotion={isSpeaking ? "listening" : "idle"}
-            audioAnalyser={null}
+            audioAnalyser={audioAnalyser}
           />
         </div>
 
         {/* Top Bar */}
         <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-20">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary-500/20 flex items-center justify-center border border-primary-500/50">
-              <span className="font-bold text-primary-400">A</span>
-            </div>
+            <img
+              src="/assets/aria-logo.png"
+              alt="ARIA Logo"
+              className="w-10 h-10 rounded-full object-cover"
+            />
             <div>
               <h1 className="font-bold text-lg tracking-wide">ARIA</h1>
               <p className="text-xs text-gray-400">System Online</p>
@@ -348,9 +852,32 @@ export function HomePage() {
 
           <div className="flex items-center gap-4">
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-dark-300/50 border border-white/10">
-              <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-primary-500 animate-ping' : 'bg-green-500 animate-pulse'}`} />
-              <span className="text-xs text-gray-300">{isSpeaking ? 'Processing...' : 'Listening'}</span>
+              <div className={`w-2 h-2 rounded-full ${
+                isProcessing ? 'bg-blue-500 animate-pulse' :
+                isSpeaking ? 'bg-primary-500 animate-ping' :
+                pendingCommand ? 'bg-yellow-500 animate-bounce' :
+                isListeningForCommand ? 'bg-yellow-500 animate-pulse' :
+                'bg-green-500 animate-pulse'
+              }`} />
+              <span className="text-xs text-gray-300">
+                {isProcessing ? 'Processing...' :
+                 isSpeaking ? 'Speaking...' :
+                 pendingCommand ? 'Awaiting confirmation...' :
+                 isListeningForCommand ? 'Awaiting command...' :
+                 'Listening'}
+              </span>
             </div>
+
+            {currentIntent && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                className="px-3 py-1.5 rounded-full bg-primary-500/20 border border-primary-500/30"
+              >
+                <span className="text-xs text-primary-300">{currentIntent}</span>
+              </motion.div>
+            )}
 
             <button
               onClick={() => setShowSettings(true)}
@@ -397,16 +924,8 @@ export function HomePage() {
             </motion.div>
           </div>
 
-          {/* Middle: Spacer for Soundwave */}
+          {/* Middle: Spacer */}
           <div className="grow flex flex-col items-center justify-center gap-8">
-             {/* Audio Wave Visualization */}
-             <AudioWaveVisualization
-               isSpeaking={isSpeaking}
-               primaryColor={user?.selectedAvatarColor || '#0ea5e9'}
-               secondaryColor={user?.selectedAvatarColor ? `${user.selectedAvatarColor}cc` : '#3b82f6'}
-               size="large"
-             />
-
              {/* Optional: Visual cue for last command */}
              <AnimatePresence>
                {lastCommand && (
@@ -464,15 +983,17 @@ export function HomePage() {
 
         </div>
 
-        {/* Floating Info Button */}
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          onClick={() => setShowVoiceCommands(true)}
-          className="fixed bottom-8 right-8 z-50 p-4 bg-primary-600 hover:bg-primary-500 text-white rounded-full shadow-lg shadow-primary-600/30 transition-all hover:scale-110 cursor-pointer"
-        >
-          <Info className="w-6 h-6" />
-        </motion.button>
+        {/* Floating Info Button - Only show after onboarding is complete */}
+        {user?.onboardingCompleted && (
+          <motion.button
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            onClick={() => setShowVoiceCommands(true)}
+            className="fixed bottom-8 right-8 z-50 p-4 bg-primary-600 hover:bg-primary-500 text-white rounded-full shadow-lg shadow-primary-600/30 transition-all hover:scale-110 cursor-pointer"
+          >
+            <Info className="w-6 h-6" />
+          </motion.button>
+        )}
 
       </div>
     </>

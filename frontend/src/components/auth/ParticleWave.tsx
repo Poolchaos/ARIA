@@ -69,22 +69,16 @@ export function ParticleWave({ isSpeaking = false, emotion = 'idle', className =
       for (let i = 0; i < barCount; i++) {
         let barHeight = 4; // Minimum height when idle
 
-        if (frequencies.length > 0 && isSpeaking) {
+        // Only animate if we have real audio data
+        if (frequencies.length > 0 && isSpeaking && audioAnalyser) {
           // Create symmetric pattern from center
           const centerIndex = barCount / 2;
           const distanceFromCenter = Math.abs(i - centerIndex);
           const freqIndex = Math.floor((distanceFromCenter / centerIndex) * (frequencies.length / 2));
           const amplitude = frequencies[freqIndex] || 0;
           barHeight = (amplitude / 255) * (rect.height * 0.3); // Reduced to 60% (0.5 * 0.6 = 0.3)
-        } else if (isSpeaking) {
-          // Animated fallback
-          const time = Date.now() * 0.003;
-          const centerIndex = barCount / 2;
-          const distanceFromCenter = Math.abs(i - centerIndex);
-          const wave = Math.sin(distanceFromCenter * 0.3 + time) * 0.6 +
-                      Math.sin(distanceFromCenter * 0.15 + time * 1.3) * 0.4;
-          barHeight = Math.abs(wave) * rect.height * 0.21; // Reduced to 60% (0.35 * 0.6 = 0.21)
         }
+        // No fallback animation - stay at minimum height if no audio data
 
         const x = startX + i * barWidth;
         const y = centerY - barHeight / 2;

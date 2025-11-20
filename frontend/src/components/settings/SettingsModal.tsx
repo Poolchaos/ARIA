@@ -83,7 +83,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <div>
                         <p className="text-white font-medium">Voice</p>
                         <p className="text-gray-400 text-sm">
-                          {user?.voiceName || 'Default'}
+                          {(() => {
+                            try {
+                              const voiceData = user?.voiceName;
+                              if (typeof voiceData === 'string' && voiceData.startsWith('{')) {
+                                const parsed = JSON.parse(voiceData);
+                                return `${parsed.displayName || parsed.name} (${parsed.accent || parsed.gender})`;
+                              }
+                              return voiceData || 'Default';
+                            } catch {
+                              return user?.voiceName || 'Default';
+                            }
+                          })()}
                         </p>
                       </div>
                     </div>
@@ -109,7 +120,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <div>
                         <p className="text-white font-medium">Avatar</p>
                         <p className="text-gray-400 text-sm capitalize">
-                          {user?.selectedAvatar || 'Wave'}
+                          {(() => {
+                            try {
+                              const avatarData = user?.selectedAvatar;
+                              if (typeof avatarData === 'string' && avatarData.startsWith('{')) {
+                                const parsed = JSON.parse(avatarData);
+                                return parsed.Name || parsed.name || 'Wave';
+                              }
+                              return avatarData || 'Wave';
+                            } catch {
+                              return user?.selectedAvatar || 'Wave';
+                            }
+                          })()}
                         </p>
                       </div>
                       <div
@@ -131,7 +153,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       <div>
                         <p className="text-white font-medium">Style</p>
                         <p className="text-gray-400 text-sm capitalize">
-                          {user?.selectedPersonality || 'Friendly'}
+                          {(() => {
+                            try {
+                              const personalityData = user?.selectedPersonality;
+                              if (typeof personalityData === 'string' && personalityData.startsWith('{')) {
+                                const parsed = JSON.parse(personalityData);
+                                return parsed.Name || parsed.name || 'Friendly';
+                              }
+                              return personalityData || 'Friendly';
+                            } catch {
+                              return user?.selectedPersonality || 'Friendly';
+                            }
+                          })()}
                         </p>
                       </div>
                     </div>
