@@ -175,6 +175,26 @@ See [LICENSE](LICENSE) file for full text.
 
 **Commercial Licensing:** Contact us for commercial licensing options.
 
+## Testing
+
+ARIA includes a comprehensive testing suite for the frontend voice interface.
+
+### Unit Tests (Vitest)
+Tests logic, hooks, and components in isolation using a simulated browser environment.
+
+```bash
+cd frontend
+npm test
+```
+
+### End-to-End Tests (Playwright)
+Tests the full application flow in a real browser instance, injecting a "Virtual Voice" to simulate user speech.
+
+```bash
+cd frontend
+npx playwright test
+```
+
 ## Contributing
 
 This project follows strict development standards. See [Core Rules](docs/_rules/core_rules.md) for:
