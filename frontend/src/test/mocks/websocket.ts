@@ -13,7 +13,6 @@ export class MockWebSocket {
   onerror: ((event: any) => void) | null = null;
 
   constructor(url: string) {
-    console.log('MockWebSocket constructor called with url:', url);
     this.url = url;
     this.readyState = MockWebSocket.CLOSED;
     MockWebSocket.instances.push(this);

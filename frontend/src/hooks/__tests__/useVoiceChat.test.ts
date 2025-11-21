@@ -18,7 +18,6 @@ class MockWebSocket {
   onmessage: ((event: MessageEvent) => void) | null = null;
 
   constructor(url: string) {
-    console.log('Local MockWebSocket constructor called');
     this.url = url;
     this.readyState = MockWebSocket.CLOSED;
     MockWebSocket.instances.push(this);

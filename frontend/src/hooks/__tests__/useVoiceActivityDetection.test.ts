@@ -12,7 +12,6 @@ const mockVAD = {
 vi.mock('@ricky0123/vad-web', () => ({
   MicVAD: {
     new: vi.fn(async (options) => {
-      console.log('MicVAD.new called');
       // Store callbacks for testing
       (mockVAD as any).onSpeechStart = options.onSpeechStart;
       (mockVAD as any).onSpeechEnd = options.onSpeechEnd;
