@@ -35,7 +35,7 @@ export function CompletionStep({ onFinish, onVoiceStateChange }: CompletionStepP
 
     return () => {
       onVoiceStateChange(false);
-      hasStartedRef.current = false;
+      // Don't reset hasStartedRef to prevent double playback
     };
   }, [onVoiceStateChange]);
 
