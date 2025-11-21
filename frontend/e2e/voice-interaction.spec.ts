@@ -38,12 +38,10 @@ test.describe('Voice Interaction', () => {
         onstart: (() => void) | null = null;
 
         start() {
-          console.log('Mock Speech Recognition Started');
           if (this.onstart) this.onstart();
         }
 
         stop() {
-          console.log('Mock Speech Recognition Stopped');
           if (this.onend) this.onend();
         }
 
