@@ -52,7 +52,9 @@ describe('useVoiceActivityDetection', () => {
       })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     expect(mockVAD.start).toHaveBeenCalled();
     expect(result.current.isListening).toBe(true);
@@ -68,7 +70,9 @@ describe('useVoiceActivityDetection', () => {
       })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     // Trigger speech start
     act(() => {
@@ -88,7 +92,9 @@ describe('useVoiceActivityDetection', () => {
       })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     // Trigger speech end
     act(() => {
@@ -100,17 +106,24 @@ describe('useVoiceActivityDetection', () => {
 
   it('should stop VAD when disabled', async () => {
     const { result, rerender } = renderHook(
-      ({ enabled }) => useVoiceActivityDetection({ enabled }),
-      { initialProps: { enabled: true } }
+      (props) => useVoiceActivityDetection(props),
+      {
+        initialProps: { enabled: true },
+      }
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     expect(result.current.isListening).toBe(true);
 
     // Disable
     rerender({ enabled: false });
-    await vi.runAllTimersAsync();
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     expect(mockVAD.destroy).toHaveBeenCalled();
     expect(result.current.isListening).toBe(false);
@@ -121,7 +134,9 @@ describe('useVoiceActivityDetection', () => {
       useVoiceActivityDetection({ enabled: true })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     act(() => {
       result.current.pause();
@@ -143,7 +158,9 @@ describe('useVoiceActivityDetection', () => {
       useVoiceActivityDetection({ enabled: true })
     );
 
-    await vi.runAllTimersAsync();
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
 
     unmount();
 
