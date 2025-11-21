@@ -65,3 +65,4 @@ docs/
 backend/google-tts-credentials.json
 temp*.txt
 frontend/playwright-report/
+frontend/test-results/
